@@ -126,9 +126,11 @@ def add_model_components(m, d, scenario_directory, subproblem, stage):
             "dr_new",
             "gen_new_bin",
             "gen_new_lin",
+            "gen_new_ccs",
             "gen_ret_bin",
             "gen_ret_lin",
             "gen_spec",
+            "gen_spec_ccs",
             "stor_new_bin",
             "stor_new_lin",
             "stor_spec",
@@ -144,6 +146,7 @@ def add_model_components(m, d, scenario_directory, subproblem, stage):
             "gen_always_on",
             "gen_commit_bin",
             "gen_commit_cap",
+            "gen_commit_cap_ccs",
             "gen_commit_lin",
             "gen_hydro",
             "gen_hydro_must_take",
@@ -156,6 +159,9 @@ def add_model_components(m, d, scenario_directory, subproblem, stage):
             "fuel_prod",
             "dac",
             "flex_load",
+            "gen_H2",
+            "stor_H2",
+            "gen_H2_ele"
         ],
     )
     m.availability_type = Param(
