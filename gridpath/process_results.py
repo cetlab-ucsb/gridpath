@@ -1,4 +1,4 @@
-# Copyright 2016-2023 Blue Marble Analytics LLC.
+# Copyright 2016-2020 Blue Marble Analytics LLC.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -22,33 +22,37 @@ The main() function of this script can also be called with the
 """
 
 
+from __future__ import print_function
+
 from argparse import ArgumentParser
 import sys
 
 from db.common_functions import connect_to_database
-from gridpath.common_functions import (
-    determine_scenario_directory,
-    get_db_parser,
-    get_required_e2e_arguments_parser,
-)
+from gridpath.common_functions import determine_scenario_directory, \
+    get_db_parser, get_required_e2e_arguments_parser
 from gridpath.auxiliary.db_interface import get_scenario_id_and_name
 from gridpath.auxiliary.module_list import determine_modules, load_modules
 from gridpath.auxiliary.scenario_chars import SubScenarios
 
 
-def process_results(loaded_modules, db, cursor, scenario_id, subscenarios, quiet):
+def process_results(
+        loaded_modules, db, cursor, scenario_id, subscenarios, quiet
+):
     """
-
-    :param loaded_modules:
-    :param db:
-    :param cursor:
+    
+    :param loaded_modules: 
+    :param db: 
+    :param cursor: 
     :param subscenarios:
     :param quiet:
-    :return:
+    :return: 
     """
     for m in loaded_modules:
         if hasattr(m, "process_results"):
-            m.process_results(db, cursor, scenario_id, subscenarios, quiet)
+            m.process_results(
+                db, cursor, scenario_id, subscenarios, quiet)
+        else:
+            pass
 
 
 def parse_arguments(args):
@@ -60,7 +64,8 @@ def parse_arguments(args):
     Parse the known arguments.
     """
     parser = ArgumentParser(
-        add_help=True, parents=[get_db_parser(), get_required_e2e_arguments_parser()]
+        add_help=True,
+        parents=[get_db_parser(), get_required_e2e_arguments_parser()]
     )
     parsed_arguments = parser.parse_known_args(args=args)[0]
 
@@ -89,15 +94,14 @@ def main(args=None):
         print("Processing results... (connected to database {})".format(db_path))
 
     scenario_id, scenario_name = get_scenario_id_and_name(
-        scenario_id_arg=scenario_id_arg,
-        scenario_name_arg=scenario_name_arg,
-        c=c,
-        script="process_results",
+        scenario_id_arg=scenario_id_arg, scenario_name_arg=scenario_name_arg,
+        c=c, script="process_results"
     )
 
     # Determine scenario directory
     scenario_directory = determine_scenario_directory(
-        scenario_location=scenario_location, scenario_name=scenario_name
+        scenario_location=scenario_location,
+        scenario_name=scenario_name
     )
 
     # Go through modules
@@ -108,12 +112,9 @@ def main(args=None):
     subscenarios = SubScenarios(conn=conn, scenario_id=scenario_id)
 
     process_results(
-        loaded_modules=loaded_modules,
-        db=conn,
-        cursor=c,
-        scenario_id=scenario_id,
-        subscenarios=subscenarios,
-        quiet=parsed_arguments.quiet,
+        loaded_modules=loaded_modules, db=conn, cursor=c,
+        scenario_id=scenario_id, subscenarios=subscenarios,
+        quiet=parsed_arguments.quiet
     )
 
     # Close the database connection

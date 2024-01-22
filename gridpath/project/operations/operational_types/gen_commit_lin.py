@@ -1,4 +1,4 @@
-# Copyright 2016-2023 Blue Marble Analytics LLC.
+# Copyright 2016-2021 Blue Marble Analytics LLC.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -22,11 +22,10 @@ target specific generators). Please refer to the *gen_commit_bin* module for
 more information on the formulation.
 """
 
-from gridpath.project.operations.operational_types.common_functions import (
-    validate_opchars,
-)
-from gridpath.common_functions import create_results_df
-import gridpath.project.operations.operational_types.gen_commit_unit_common as gen_commit_unit_common
+from gridpath.project.operations.operational_types.common_functions import \
+    update_dispatch_results_table, validate_opchars
+import gridpath.project.operations.operational_types.gen_commit_unit_common \
+    as gen_commit_unit_common
 
 
 def add_model_components(m, d, scenario_directory, subproblem, stage):
@@ -36,18 +35,15 @@ def add_model_components(m, d, scenario_directory, subproblem, stage):
     """
 
     gen_commit_unit_common.add_model_components(
-        m=m,
-        d=d,
+        m=m, d=d,
         scenario_directory=scenario_directory,
-        subproblem=subproblem,
-        stage=stage,
-        bin_or_lin_optype="gen_commit_lin",
+        subproblem=subproblem, stage=stage,
+        bin_or_lin_optype="gen_commit_lin"
     )
-
+    
 
 # Operational Type Methods
 ###############################################################################
-
 
 def power_provision_rule(mod, g, tmp):
     """
@@ -55,21 +51,27 @@ def power_provision_rule(mod, g, tmp):
     constrained to be between the generator's minimum stable level and its
     capacity if the generator is committed and 0 otherwise.
     """
-    return gen_commit_unit_common.power_provision_rule(mod, g, tmp, "Lin")
+    return gen_commit_unit_common.power_provision_rule(
+        mod, g, tmp, "Lin"
+    )
 
 
 def commitment_rule(mod, g, tmp):
     """
     Commitment decision in each timepoint
     """
-    return gen_commit_unit_common.commitment_rule(mod, g, tmp, "Lin")
+    return gen_commit_unit_common.commitment_rule(
+        mod, g, tmp, "Lin"
+    )
 
 
 def online_capacity_rule(mod, g, tmp):
     """
     Capacity online in each timepoint.
     """
-    return gen_commit_unit_common.online_capacity_rule(mod, g, tmp, "Lin")
+    return gen_commit_unit_common.online_capacity_rule(
+        mod, g, tmp, "Lin"
+    )
 
 
 def variable_om_cost_rule(mod, g, tmp):
@@ -93,7 +95,9 @@ def variable_om_cost_rule(mod, g, tmp):
     minus the auxiliary consumption. The variable cost should be applied to
     the gross power.
     """
-    return gen_commit_unit_common.variable_om_cost_rule(mod, g, tmp, "Lin")
+    return gen_commit_unit_common.variable_om_cost_rule(
+        mod, g, tmp, "Lin"
+    )
 
 
 def variable_om_cost_by_ll_rule(mod, g, tmp, s):
@@ -111,7 +115,9 @@ def variable_om_cost_by_ll_rule(mod, g, tmp, s):
     operational characteristics table.  Only operational types with
     commitment decisions can have the second component.
     """
-    return gen_commit_unit_common.variable_om_cost_by_ll_rule(mod, g, tmp, s, "Lin")
+    return gen_commit_unit_common.variable_om_cost_by_ll_rule(
+        mod, g, tmp, s, "Lin"
+    )
 
 
 def startup_cost_simple_rule(mod, g, tmp):
@@ -120,7 +126,9 @@ def startup_cost_simple_rule(mod, g, tmp):
     capacity (in MW) that is started up in that timepoint and the startup cost
     parameter.
     """
-    return gen_commit_unit_common.startup_cost_simple_rule(mod, g, tmp, "Lin")
+    return gen_commit_unit_common.startup_cost_simple_rule(
+        mod, g, tmp, "Lin"
+    )
 
 
 def startup_cost_by_st_rule(mod, g, tmp):
@@ -130,7 +138,9 @@ def startup_cost_by_st_rule(mod, g, tmp):
     the startup cost parameter for that startup type. We take the sum across
     all startup types since only one startup type is active at the same time.
     """
-    return gen_commit_unit_common.startup_cost_by_st_rule(mod, g, tmp, "LIN", "Lin")
+    return gen_commit_unit_common.startup_cost_by_st_rule(
+        mod, g, tmp, "LIN", "Lin"
+    )
 
 
 def shutdown_cost_rule(mod, g, tmp):
@@ -139,12 +149,17 @@ def shutdown_cost_rule(mod, g, tmp):
     capacity (in Mw) that is shut down in that timepoint and the shutdown
     cost parameter.
     """
-    return gen_commit_unit_common.shutdown_cost_rule(mod, g, tmp, "Lin")
+    return gen_commit_unit_common.shutdown_cost_rule(
+        mod, g, tmp, "Lin"
+    )
 
 
 def fuel_burn_by_ll_rule(mod, g, tmp, s):
-    """ """
-    return gen_commit_unit_common.fuel_burn_by_ll_rule(mod, g, tmp, s, "Lin")
+    """
+    """
+    return gen_commit_unit_common.fuel_burn_by_ll_rule(
+        mod, g, tmp, s, "Lin"
+    )
 
 
 def startup_fuel_burn_rule(mod, g, tmp):
@@ -153,7 +168,9 @@ def startup_fuel_burn_rule(mod, g, tmp):
     capacity (in MW) that is started up in that timepoint and the startup
     fuel parameter. This does not vary by startup type.
     """
-    return gen_commit_unit_common.startup_fuel_burn_rule(mod, g, tmp, "Lin")
+    return gen_commit_unit_common.startup_fuel_burn_rule(
+        mod, g, tmp, "Lin"
+    )
 
 
 def power_delta_rule(mod, g, tmp):
@@ -163,12 +180,17 @@ def power_delta_rule(mod, g, tmp):
     This is only used in tuning costs, so fine to skip for linked horizon's
     first timepoint.
     """
-    return gen_commit_unit_common.power_delta_rule(mod, g, tmp, "Lin")
+    return gen_commit_unit_common.power_delta_rule(
+        mod, g, tmp, "Lin"
+    )
 
 
 def fix_commitment(mod, g, tmp):
-    """ """
-    return gen_commit_unit_common.fix_commitment(mod, g, tmp, "Lin")
+    """
+    """
+    return gen_commit_unit_common.fix_commitment(
+        mod, g, tmp, "Lin"
+    )
 
 
 def operational_violation_cost_rule(mod, g, tmp):
@@ -187,8 +209,9 @@ def operational_violation_cost_rule(mod, g, tmp):
 # Input-Output
 ###############################################################################
 
-
-def load_model_data(mod, d, data_portal, scenario_directory, subproblem, stage):
+def load_model_data(
+    mod, d, data_portal, scenario_directory, subproblem, stage
+):
     """
     :param mod:
     :param data_portal:
@@ -199,59 +222,16 @@ def load_model_data(mod, d, data_portal, scenario_directory, subproblem, stage):
     """
 
     gen_commit_unit_common.load_model_data(
-        mod=mod,
-        d=d,
-        data_portal=data_portal,
-        scenario_directory=scenario_directory,
-        subproblem=subproblem,
-        stage=stage,
-        bin_or_lin_optype="gen_commit_lin",
-        bin_or_lin="lin",
-        BIN_OR_LIN="LIN",
+        mod=mod, d=d, data_portal=data_portal,
+        scenario_directory=scenario_directory, subproblem=subproblem,
+        stage=stage, bin_or_lin_optype="gen_commit_lin", bin_or_lin="lin",
+        BIN_OR_LIN="LIN"
     )
 
 
-def add_to_prj_tmp_results(mod):
-    results_columns, data = gen_commit_unit_common.add_to_prj_tmp_results(
-        mod=mod,
-        BIN_OR_LIN="LIN",
-        Bin_or_Lin="Lin",
-        bin_or_lin="lin",
-    )
-
-    (
-        duals_results_columns,
-        duals_data,
-    ) = gen_commit_unit_common.add_duals_to_dispatch_results(
-        mod=mod,
-        BIN_OR_LIN="LIN",
-        Bin_or_Lin="Lin",
-    )
-
-    # Create DF
-    optype_dispatch_df = create_results_df(
-        index_columns=["project", "timepoint"],
-        results_columns=results_columns,
-        data=data,
-    )
-
-    # Get the duals
-    optype_duals_df = create_results_df(
-        index_columns=["project", "timepoint"],
-        results_columns=duals_results_columns,
-        data=duals_data,
-    )
-
-    # Add duals to dispatch DF
-    results_columns += duals_results_columns
-    for column in duals_results_columns:
-        optype_dispatch_df[column] = None
-    optype_dispatch_df.update(optype_duals_df)
-
-    return results_columns, optype_dispatch_df
-
-
-def export_results(mod, d, scenario_directory, subproblem, stage):
+def export_results(
+    mod, d, scenario_directory, subproblem, stage
+):
     """
     :param scenario_directory:
     :param subproblem:
@@ -260,27 +240,46 @@ def export_results(mod, d, scenario_directory, subproblem, stage):
     :param d:
     :return:
     """
-    gen_commit_unit_common.export_linked_subproblem_inputs(
-        mod=mod,
-        d=d,
-        scenario_directory=scenario_directory,
-        subproblem=subproblem,
-        stage=stage,
-        BIN_OR_LIN="LIN",
-        Bin_or_Lin="Lin",
-        bin_or_lin="lin",
+    gen_commit_unit_common.export_results(
+        mod=mod, d=d, scenario_directory=scenario_directory,
+        subproblem=subproblem, stage=stage, BIN_OR_LIN="LIN",
+        Bin_or_Lin="Lin", bin_or_lin="lin",
+        results_filename="dispatch_continuous_commit.csv"
     )
 
 
-def save_duals(scenario_directory, subproblem, stage, instance, dynamic_components):
-    gen_commit_unit_common.save_duals(instance, "Lin")
+# Database
+###############################################################################
+
+def import_model_results_to_database(
+    scenario_id, subproblem, stage, c, db, results_directory, quiet
+):
+    """
+    :param scenario_id:
+    :param subproblem:
+    :param stage:
+    :param c:
+    :param db:
+    :param results_directory:
+    :param quiet:
+    :return:
+    """
+    if not quiet:
+        print("project dispatch continuous commit")
+
+    update_dispatch_results_table(
+        db=db, c=c, results_directory=results_directory,
+        scenario_id=scenario_id, subproblem=subproblem, stage=stage,
+        results_file="dispatch_continuous_commit.csv"
+    )
 
 
 # Validation
 ###############################################################################
 
-
-def validate_inputs(scenario_id, subscenarios, subproblem, stage, conn):
+def validate_inputs(
+    scenario_id, subscenarios, subproblem, stage, conn
+):
     """
     Get inputs from database and validate the inputs
 

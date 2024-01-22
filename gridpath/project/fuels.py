@@ -1,4 +1,4 @@
-# Copyright 2016-2023 Blue Marble Analytics LLC.
+# Copyright 2016-2020 Blue Marble Analytics LLC.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,15 +19,10 @@
 import csv
 import os.path
 import pandas as pd
-from pyomo.environ import Param, Set, NonNegativeReals, Reals, Any
+from pyomo.environ import Param, Set, NonNegativeReals
 from gridpath.auxiliary.auxiliary import cursor_to_df
-from gridpath.auxiliary.validations import (
-    write_validation_to_database,
-    validate_dtypes,
-    get_expected_dtypes,
-    validate_columns,
-    validate_idxs,
-)
+from gridpath.auxiliary.validations import write_validation_to_database, \
+    validate_dtypes, get_expected_dtypes, validate_columns, validate_idxs
 
 
 def add_model_components(m, d, scenario_directory, subproblem, stage):
@@ -38,21 +33,11 @@ def add_model_components(m, d, scenario_directory, subproblem, stage):
     :return:
     """
     m.FUELS = Set()
-    m.FUEL_GROUPS = Set()
-    m.FUEL_GROUPS_FUELS = Set(within=m.FUEL_GROUPS * m.FUELS)
-    m.FUELS_BY_FUEL_GROUP = Set(
-        m.FUEL_GROUPS,
-        within=m.FUELS,
-        initialize=lambda mod, fg: [
-            f for (group, f) in mod.FUEL_GROUPS_FUELS if group == fg
-        ],
-    )
-
-    # Allow negative emissions
-    m.co2_intensity_tons_per_mmbtu = Param(m.FUELS, within=Reals)
+    m.co2_intensity_tons_per_mmbtu = Param(m.FUELS, within=NonNegativeReals)
 
     m.fuel_price_per_mmbtu = Param(
-        m.FUELS, m.PERIODS, m.MONTHS, within=NonNegativeReals
+        m.FUELS, m.PERIODS, m.MONTHS,
+        within=NonNegativeReals
     )
 
 
@@ -70,37 +55,18 @@ def load_model_data(m, d, data_portal, scenario_directory, subproblem, stage):
     # Load fuel chars only if there are data
     # There will be no data in this file if the database is used and there
     # are no projects with fuels in the scenario
-    # Fuel group column is optional
     fuels_file = os.path.join(
         scenario_directory, subproblem, stage, "inputs", "fuels.tab"
     )
-    fuels_df = pd.read_csv(fuels_file, delimiter="\t")
-    if not fuels_df.empty:
+    fuels_df = pd.read_csv(fuels_file)
+    if fuels_df.empty:
+        pass
+    else:
         data_portal.load(
             filename=fuels_file,
             index=m.FUELS,
-            select=("fuel", "co2_intensity_tons_per_mmbtu"),
-            param=m.co2_intensity_tons_per_mmbtu,
+            param=m.co2_intensity_tons_per_mmbtu
         )
-
-        header = pd.read_csv(
-            os.path.join(
-                scenario_directory, str(subproblem), str(stage), "inputs", "fuels.tab"
-            ),
-            sep="\t",
-            header=None,
-            nrows=1,
-        ).values[0]
-
-        if "fuel_group" in header:
-            data_portal.data()["FUEL_GROUPS"] = fuels_df["fuel_group"].unique()
-
-            data_portal.load(
-                filename=fuels_file,
-                index=m.FUEL_GROUPS_FUELS,
-                select=("fuel_group", "fuel"),
-                param=(),
-            )
 
     # Load fuel prices only if there are data
     # There will be no data in this file if the database is used and there
@@ -109,8 +75,13 @@ def load_model_data(m, d, data_portal, scenario_directory, subproblem, stage):
         scenario_directory, subproblem, stage, "inputs", "fuel_prices.tab"
     )
     fuel_prices_df = pd.read_csv(fuels_prices_file)
-    if not fuel_prices_df.empty:
-        data_portal.load(filename=fuels_prices_file, param=m.fuel_price_per_mmbtu)
+    if fuels_df.empty:
+        pass
+    else:
+        data_portal.load(
+            filename=fuels_prices_file,
+            param=m.fuel_price_per_mmbtu
+        )
 
 
 def get_inputs_from_database(scenario_id, subscenarios, subproblem, stage, conn):
@@ -125,39 +96,34 @@ def get_inputs_from_database(scenario_id, subscenarios, subproblem, stage, conn)
     stage = 1 if stage == "" else stage
     c1 = conn.cursor()
     fuels = c1.execute(
-        """SELECT DISTINCT fuel, co2_intensity_tons_per_mmbtu, fuel_group
+        """SELECT DISTINCT fuel, co2_intensity_tons_per_mmbtu
         FROM (
-        SELECT project, fuel, min_fraction_in_fuel_blend, max_fraction_in_fuel_blend
+        -- Select the projects in the relevant portfolios
+        SELECT project
         FROM inputs_project_portfolios
-        -- select the correct operational characteristics subscenario
-        INNER JOIN
-        (SELECT project, project_fuel_scenario_id
+        WHERE project_portfolio_scenario_id = {} 
+        ) as prj_portfolio_tbl
+        LEFT OUTER JOIN (
+        -- Get the fuels for those projects
+        SELECT project, fuel
         FROM inputs_project_operational_chars
-        WHERE project_operational_chars_scenario_id = {opchar_scenario_id}
-        ) AS op_char
-        USING(project)
-        -- select only heat curves of matching projects
-        INNER JOIN
-        inputs_project_fuels
-        USING(project, project_fuel_scenario_id)
-        -- Get only the subset of projects in the portfolio based on the 
-        -- project_portfolio_scenario_id 
-        WHERE project_portfolio_scenario_id = {portfolio_scenario_id}
-        ) as project_fuels_tbl
+        WHERE project_operational_chars_scenario_id = {}
+        ) AS opchar_tbl
+        USING (project)
         LEFT OUTER JOIN (
         -- Get the fuel chars for the relevant fuels
-        SELECT fuel, co2_intensity_tons_per_mmbtu, fuel_group
-        FROM inputs_fuels
-        WHERE fuel_scenario_id = {fuel_scenario_id}
+        SELECT fuel, co2_intensity_tons_per_mmbtu
+        FROM inputs_project_fuels
+        WHERE fuel_scenario_id = {}
         ) AS fuels_tbl
         USING (fuel)
         -- Filter out the NULLs (from projects with no fuels)
         WHERE fuel NOT NULL
         ;
         """.format(
-            opchar_scenario_id=subscenarios.PROJECT_OPERATIONAL_CHARS_SCENARIO_ID,
-            portfolio_scenario_id=subscenarios.PROJECT_PORTFOLIO_SCENARIO_ID,
-            fuel_scenario_id=subscenarios.FUEL_SCENARIO_ID,
+            subscenarios.PROJECT_PORTFOLIO_SCENARIO_ID,
+            subscenarios.PROJECT_OPERATIONAL_CHARS_SCENARIO_ID,
+            subscenarios.FUEL_SCENARIO_ID
         )
     )
 
@@ -165,45 +131,40 @@ def get_inputs_from_database(scenario_id, subscenarios, subproblem, stage, conn)
     fuel_prices = c2.execute(
         """SELECT DISTINCT fuel, period, month, fuel_price_per_mmbtu
         FROM (
-       SELECT project, fuel, min_fraction_in_fuel_blend, max_fraction_in_fuel_blend
+        -- Select the projects in the relevant portfolios
+        SELECT project
         FROM inputs_project_portfolios
-        -- select the correct operational characteristics subscenario
-        INNER JOIN
-        (SELECT project, project_fuel_scenario_id
+        WHERE project_portfolio_scenario_id = {}
+        ) as prj_portfolio_tbl
+        LEFT OUTER JOIN (
+        -- Get the fuels for those projects
+        SELECT project, fuel
         FROM inputs_project_operational_chars
-        WHERE project_operational_chars_scenario_id = {opchar_scenario_id}
-        ) AS op_char
-        USING(project)
-        -- select only heat curves of matching projects
-        INNER JOIN
-        inputs_project_fuels
-        USING(project, project_fuel_scenario_id)
-        -- Get only the subset of projects in the portfolio based on the 
-        -- project_portfolio_scenario_id 
-        WHERE project_portfolio_scenario_id = {portfolio_scenario_id}
-        ) as project_fuels_tbl
+        WHERE project_operational_chars_scenario_id = {}
+        ) AS opchar_tbl
+        USING (project)
         LEFT OUTER JOIN (
         -- Get the fuel chars for the relevant fuels
         SELECT fuel, period, month, fuel_price_per_mmbtu
-        FROM inputs_fuel_prices
-        WHERE fuel_price_scenario_id = {fuel_price_scenario_id}
+        FROM inputs_project_fuel_prices
+        WHERE fuel_price_scenario_id = {}
         ) AS fuels_tbl
         USING (fuel)
         -- Only get periods in the relevant temporal_scenario_id
         INNER JOIN (
         SELECT period
         FROM inputs_temporal_periods
-        WHERE temporal_scenario_id = {temporal_scenario_id}
+        WHERE temporal_scenario_id = {}
         ) as periods_tbl
         USING (period)
         -- Filter out the NULLs (from projects with no fuels)
         WHERE fuel NOT NULL
         ;
         """.format(
-            opchar_scenario_id=subscenarios.PROJECT_OPERATIONAL_CHARS_SCENARIO_ID,
-            portfolio_scenario_id=subscenarios.PROJECT_PORTFOLIO_SCENARIO_ID,
-            fuel_price_scenario_id=subscenarios.FUEL_PRICE_SCENARIO_ID,
-            temporal_scenario_id=subscenarios.TEMPORAL_SCENARIO_ID,
+            subscenarios.PROJECT_PORTFOLIO_SCENARIO_ID,
+            subscenarios.PROJECT_OPERATIONAL_CHARS_SCENARIO_ID,
+            subscenarios.FUEL_PRICE_SCENARIO_ID,
+            subscenarios.TEMPORAL_SCENARIO_ID
         )
     )
 
@@ -222,32 +183,22 @@ def validate_inputs(scenario_id, subscenarios, subproblem, stage, conn):
 
     # Get the fuel input data
     fuels, fuel_prices = get_inputs_from_database(
-        scenario_id, subscenarios, subproblem, stage, conn
-    )
+        scenario_id, subscenarios, subproblem, stage, conn)
 
     # Get the projects fuels
     c1 = conn.cursor()
     projects = c1.execute(
-        """
-        SELECT project, fuel, min_fraction_in_fuel_blend, max_fraction_in_fuel_blend
+        """SELECT project, fuel
         FROM inputs_project_portfolios
-        -- select the correct operational characteristics subscenario
         INNER JOIN
-        (SELECT project, project_fuel_scenario_id
+        (SELECT project, fuel
         FROM inputs_project_operational_chars
         WHERE project_operational_chars_scenario_id = {}
-        ) AS op_char
-        USING(project)
-        -- select only heat curves of matching projects
-        INNER JOIN
-        inputs_project_fuels
-        USING(project, project_fuel_scenario_id)
-        -- Get only the subset of projects in the portfolio based on the 
-        -- project_portfolio_scenario_id 
-        WHERE project_portfolio_scenario_id = {}
-        """.format(
+        AND fuel IS NOT NULL) AS op_char
+        USING (project)
+        WHERE project_portfolio_scenario_id = {}""".format(
             subscenarios.PROJECT_OPERATIONAL_CHARS_SCENARIO_ID,
-            subscenarios.PROJECT_PORTFOLIO_SCENARIO_ID,
+            subscenarios.PROJECT_PORTFOLIO_SCENARIO_ID
         )
     )
 
@@ -271,12 +222,16 @@ def validate_inputs(scenario_id, subscenarios, subproblem, stage, conn):
     # Get relevant lists
     fuels = fuels_df["fuel"].to_list()
     actual_fuel_periods_months = list(
-        fuel_prices_df[["fuel", "period", "month"]].itertuples(index=False, name=None)
+        fuel_prices_df[["fuel", "period", "month"]]
+        .itertuples(index=False, name=None)
     )
-    req_fuel_periods_months = [(f, p, m) for (p, m) in periods_months for f in fuels]
+    req_fuel_periods_months = [(f, p, m) for (p, m) in periods_months
+                               for f in fuels]
 
     # Check data types
-    expected_dtypes = get_expected_dtypes(conn, ["inputs_fuels", "inputs_fuel_prices"])
+    expected_dtypes = get_expected_dtypes(
+        conn, ["inputs_project_fuels", "inputs_project_fuel_prices"]
+    )
 
     dtype_errors, error_columns = validate_dtypes(fuels_df, expected_dtypes)
     write_validation_to_database(
@@ -285,9 +240,9 @@ def validate_inputs(scenario_id, subscenarios, subproblem, stage, conn):
         subproblem_id=subproblem,
         stage_id=stage,
         gridpath_module=__name__,
-        db_table="inputs_fuels",
+        db_table="inputs_project_fuels",
         severity="High",
-        errors=dtype_errors,
+        errors=dtype_errors
     )
 
     dtype_errors, error_columns = validate_dtypes(fuel_prices_df, expected_dtypes)
@@ -297,9 +252,9 @@ def validate_inputs(scenario_id, subscenarios, subproblem, stage, conn):
         subproblem_id=subproblem,
         stage_id=stage,
         gridpath_module=__name__,
-        db_table="inputs_fuel_prices",
+        db_table="inputs_project_fuel_prices",
         severity="High",
-        errors=dtype_errors,
+        errors=dtype_errors
     )
 
     # TODO: couldn't this be a simple foreign key or is NULL not allowed then?
@@ -313,7 +268,7 @@ def validate_inputs(scenario_id, subscenarios, subproblem, stage, conn):
         gridpath_module=__name__,
         db_table="inputs_project_operational_chars",
         severity="High",
-        errors=validate_columns(prj_df, "fuel", valids=fuels),
+        errors=validate_columns(prj_df, "fuel", valids=fuels)
     )
 
     # Check that fuel prices exist for the period and month
@@ -323,19 +278,15 @@ def validate_inputs(scenario_id, subscenarios, subproblem, stage, conn):
         subproblem_id=subproblem,
         stage_id=stage,
         gridpath_module=__name__,
-        db_table="inputs_fuel_prices",
+        db_table="inputs_project_fuel_prices",
         severity="High",
-        errors=validate_idxs(
-            actual_idxs=actual_fuel_periods_months,
-            req_idxs=req_fuel_periods_months,
-            idx_label="(fuel, period, month)",
-        ),
+        errors=validate_idxs(actual_idxs=actual_fuel_periods_months,
+                             req_idxs=req_fuel_periods_months,
+                             idx_label="(fuel, period, month)")
     )
 
 
-def write_model_inputs(
-    scenario_directory, scenario_id, subscenarios, subproblem, stage, conn
-):
+def write_model_inputs(scenario_directory, scenario_id, subscenarios, subproblem, stage, conn):
     """
     Get inputs from database and write out the model input
     fuels.tab and fuel_prices.tab files.
@@ -348,36 +299,30 @@ def write_model_inputs(
     """
 
     fuels, fuel_prices = get_inputs_from_database(
-        scenario_id, subscenarios, subproblem, stage, conn
-    )
+        scenario_id, subscenarios, subproblem, stage, conn)
 
-    with open(
-        os.path.join(
-            scenario_directory, str(subproblem), str(stage), "inputs", "fuels.tab"
-        ),
-        "w",
-        newline="",
-    ) as fuels_tab_file:
+    with open(os.path.join(scenario_directory, str(subproblem), str(stage), "inputs",
+                           "fuels.tab"), "w", newline="") as \
+            fuels_tab_file:
         writer = csv.writer(fuels_tab_file, delimiter="\t", lineterminator="\n")
 
         # Write header
-        writer.writerow(["fuel", "co2_intensity_tons_per_mmbtu", "fuel_group"])
+        writer.writerow(
+            ["FUELS", "co2_intensity_tons_per_mmbtu"]
+        )
 
         for row in fuels:
-            replace_nulls = ["." if i is None else i for i in row]
-            writer.writerow(replace_nulls)
+            writer.writerow(row)
 
-    with open(
-        os.path.join(
-            scenario_directory, str(subproblem), str(stage), "inputs", "fuel_prices.tab"
-        ),
-        "w",
-        newline="",
-    ) as fuel_prices_tab_file:
+    with open(os.path.join(scenario_directory, str(subproblem), str(stage), "inputs",
+                           "fuel_prices.tab"), "w", newline="") as \
+            fuel_prices_tab_file:
         writer = csv.writer(fuel_prices_tab_file, delimiter="\t", lineterminator="\n")
 
         # Write header
-        writer.writerow(["fuel", "period", "month", "fuel_price_per_mmbtu"])
+        writer.writerow(
+            ["fuel", "period", "month", "fuel_price_per_mmbtu"]
+        )
 
         for row in fuel_prices:
             writer.writerow(row)

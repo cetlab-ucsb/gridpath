@@ -1,4 +1,4 @@
-# Copyright 2016-2023 Blue Marble Analytics LLC.
+# Copyright 2016-2020 Blue Marble Analytics LLC.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -23,26 +23,13 @@ of line flow.
 
 import os
 import pandas as pd
-from pyomo.environ import (
-    Set,
-    Param,
-    Var,
-    Constraint,
-    NonNegativeReals,
-    Reals,
-    PercentFraction,
-)
-
-from gridpath.auxiliary.auxiliary import (
-    subset_init_by_param_value,
-    subset_init_by_set_membership,
-)
-
-Negative_Infinity = float("-inf")
-Infinity = float("inf")
+from pyomo.environ import Set, Param, Var, Constraint, NonNegativeReals, \
+    Reals, PercentFraction
 
 
-def add_model_components(m, d, scenario_directory, subproblem, stage):
+def add_model_components(
+        m, d, scenario_directory, subproblem, stage
+):
     """
     The following Pyomo model components are defined in this module:
 
@@ -70,6 +57,7 @@ def add_model_components(m, d, scenario_directory, subproblem, stage):
     |                                                                         |
     | The fraction of power that is lost when transmitted over this line.     |
     +-------------------------------------------------------------------------+
+
 
     |
 
@@ -156,65 +144,80 @@ def add_model_components(m, d, scenario_directory, subproblem, stage):
 
     m.TX_SIMPLE = Set(
         within=m.TX_LINES,
-        initialize=lambda mod: subset_init_by_param_value(
-            mod=mod,
-            set_name="TX_LINES",
-            param_name="tx_operational_type",
-            param_value="tx_simple",
-        ),
+        initialize=lambda mod: list(
+            set(l for l in mod.TX_LINES
+                if mod.tx_operational_type[l] == "tx_simple")
+        )
     )
 
     m.TX_SIMPLE_OPR_TMPS = Set(
-        dimen=2,
-        within=m.TX_OPR_TMPS,
-        initialize=lambda mod: subset_init_by_set_membership(
-            mod=mod, superset="TX_OPR_TMPS", index=0, membership_set=mod.TX_SIMPLE
-        ),
+        dimen=2, within=m.TX_OPR_TMPS,
+        initialize=lambda mod: list(
+            set((l, tmp) for (l, tmp) in mod.TX_OPR_TMPS
+                if l in mod.TX_SIMPLE)
+        )
     )
 
     # Params
     ###########################################################################
-    m.tx_simple_loss_factor = Param(m.TX_SIMPLE, within=PercentFraction, default=0)
+    m.tx_simple_loss_factor = Param(
+        m.TX_SIMPLE, within=PercentFraction, default=0
+    )
 
     # Variables
     ###########################################################################
 
-    m.TxSimple_Transmit_Power_MW = Var(m.TX_SIMPLE_OPR_TMPS, within=Reals)
-    m.TxSimple_Losses_LZ_From_MW = Var(m.TX_SIMPLE_OPR_TMPS, within=NonNegativeReals)
+    m.TxSimple_Transmit_Power_MW = Var(
+        m.TX_SIMPLE_OPR_TMPS,
+        within=Reals
+    )
 
-    m.TxSimple_Losses_LZ_To_MW = Var(m.TX_SIMPLE_OPR_TMPS, within=NonNegativeReals)
+    m.TxSimple_Losses_LZ_From_MW = Var(
+        m.TX_SIMPLE_OPR_TMPS,
+        within=NonNegativeReals
+    )
+
+    m.TxSimple_Losses_LZ_To_MW = Var(
+        m.TX_SIMPLE_OPR_TMPS,
+        within=NonNegativeReals
+    )
 
     # Constraints
     ###########################################################################
 
     m.TxSimple_Min_Transmit_Constraint = Constraint(
-        m.TX_SIMPLE_OPR_TMPS, rule=min_transmit_rule
+        m.TX_SIMPLE_OPR_TMPS,
+        rule=min_transmit_rule
     )
 
     m.TxSimple_Max_Transmit_Constraint = Constraint(
-        m.TX_SIMPLE_OPR_TMPS, rule=max_transmit_rule
+        m.TX_SIMPLE_OPR_TMPS,
+        rule=max_transmit_rule
     )
 
     m.TxSimple_Losses_LZ_From_Constraint = Constraint(
-        m.TX_SIMPLE_OPR_TMPS, rule=losses_lz_from_rule
+        m.TX_SIMPLE_OPR_TMPS,
+        rule=losses_lz_from_rule
     )
 
     m.TxSimple_Losses_LZ_To_Constraint = Constraint(
-        m.TX_SIMPLE_OPR_TMPS, rule=losses_lz_to_rule
+        m.TX_SIMPLE_OPR_TMPS,
+        rule=losses_lz_to_rule
     )
 
     m.TxSimple_Max_Losses_From_Constraint = Constraint(
-        m.TX_SIMPLE_OPR_TMPS, rule=max_losses_from_rule
+        m.TX_SIMPLE_OPR_TMPS,
+        rule=max_losses_from_rule
     )
 
     m.TxSimple_Max_Losses_To_Constraint = Constraint(
-        m.TX_SIMPLE_OPR_TMPS, rule=max_losses_to_rule
+        m.TX_SIMPLE_OPR_TMPS,
+        rule=max_losses_to_rule
     )
 
 
 # Constraint Formulation Rules
 ###############################################################################
-
 
 # TODO: should these move to operations.py since all transmission op_types
 #  have this constraint?
@@ -226,11 +229,8 @@ def min_transmit_rule(mod, l, tmp):
     Transmitted power should exceed the minimum transmission flow capacity in
     each operational timepoint.
     """
-    return (
-        mod.TxSimple_Transmit_Power_MW[l, tmp]
+    return mod.TxSimple_Transmit_Power_MW[l, tmp] \
         >= mod.Tx_Min_Capacity_MW[l, mod.period[tmp]]
-        * mod.Tx_Availability_Derate[l, tmp]
-    )
 
 
 def max_transmit_rule(mod, l, tmp):
@@ -241,11 +241,8 @@ def max_transmit_rule(mod, l, tmp):
     Transmitted power cannot exceed the maximum transmission flow capacity in
     each operational timepoint.
     """
-    return (
-        mod.TxSimple_Transmit_Power_MW[l, tmp]
+    return mod.TxSimple_Transmit_Power_MW[l, tmp] \
         <= mod.Tx_Max_Capacity_MW[l, mod.period[tmp]]
-        * mod.Tx_Availability_Derate[l, tmp]
-    )
 
 
 def losses_lz_from_rule(mod, l, tmp):
@@ -267,10 +264,9 @@ def losses_lz_from_rule(mod, l, tmp):
     if mod.tx_simple_loss_factor[l] == 0:
         return mod.TxSimple_Losses_LZ_From_MW[l, tmp] == 0
     else:
-        return (
-            mod.TxSimple_Losses_LZ_From_MW[l, tmp]
-            >= -mod.TxSimple_Transmit_Power_MW[l, tmp] * mod.tx_simple_loss_factor[l]
-        )
+        return mod.TxSimple_Losses_LZ_From_MW[l, tmp] >= \
+            - mod.TxSimple_Transmit_Power_MW[l, tmp] * \
+            mod.tx_simple_loss_factor[l]
 
 
 def losses_lz_to_rule(mod, l, tmp):
@@ -291,10 +287,9 @@ def losses_lz_to_rule(mod, l, tmp):
     if mod.tx_simple_loss_factor[l] == 0:
         return mod.TxSimple_Losses_LZ_To_MW[l, tmp] == 0
     else:
-        return (
-            mod.TxSimple_Losses_LZ_To_MW[l, tmp]
-            >= mod.TxSimple_Transmit_Power_MW[l, tmp] * mod.tx_simple_loss_factor[l]
-        )
+        return mod.TxSimple_Losses_LZ_To_MW[l, tmp] >= \
+            mod.TxSimple_Transmit_Power_MW[l, tmp] * \
+            mod.tx_simple_loss_factor[l]
 
 
 def max_losses_from_rule(mod, l, tmp):
@@ -308,12 +303,9 @@ def max_losses_from_rule(mod, l, tmp):
     if mod.tx_simple_loss_factor[l] == 0:
         return mod.TxSimple_Losses_LZ_From_MW[l, tmp] == 0
     else:
-        return (
-            mod.TxSimple_Losses_LZ_From_MW[l, tmp]
-            <= -mod.Tx_Min_Capacity_MW[l, mod.period[tmp]]
-            * mod.Tx_Availability_Derate[l, tmp]
+        return mod.TxSimple_Losses_LZ_From_MW[l, tmp] \
+            <= mod.Tx_Max_Capacity_MW[l, mod.period[tmp]] \
             * mod.tx_simple_loss_factor[l]
-        )
 
 
 def max_losses_to_rule(mod, l, tmp):
@@ -327,17 +319,12 @@ def max_losses_to_rule(mod, l, tmp):
     if mod.tx_simple_loss_factor[l] == 0:
         return mod.TxSimple_Losses_LZ_To_MW[l, tmp] == 0
     else:
-        return (
-            mod.TxSimple_Losses_LZ_To_MW[l, tmp]
-            <= mod.Tx_Max_Capacity_MW[l, mod.period[tmp]]
-            * mod.Tx_Availability_Derate[l, tmp]
+        return mod.TxSimple_Losses_LZ_To_MW[l, tmp] \
+            <= mod.Tx_Max_Capacity_MW[l, mod.period[tmp]] \
             * mod.tx_simple_loss_factor[l]
-        )
-
 
 # Transmission Operational Type Methods
 ###############################################################################
-
 
 def transmit_power_rule(mod, line, tmp):
     """
@@ -348,7 +335,7 @@ def transmit_power_rule(mod, line, tmp):
 
 def transmit_power_losses_lz_from_rule(mod, line, tmp):
     """
-    Transmission losses that we'll account for in the origin
+    Transmission losses that we'll account for in the origin 
     load zone (load_zone_from) of this transmission line. These are zero
     when the flow is positive (power flowing from the origin load zone) and
     can be more than 0 when the flow is negative (power flowing to the
@@ -371,8 +358,8 @@ def transmit_power_losses_lz_to_rule(mod, line, tmp):
 # Input-Output
 ###############################################################################
 
-
-def load_model_data(m, d, data_portal, scenario_directory, subproblem, stage):
+def load_model_data(m, d, data_portal, scenario_directory,
+                              subproblem, stage):
     """
 
     :param m:
@@ -385,20 +372,19 @@ def load_model_data(m, d, data_portal, scenario_directory, subproblem, stage):
 
     # Get the simple transport model lines
     df = pd.read_csv(
-        os.path.join(
-            scenario_directory,
-            str(subproblem),
-            str(stage),
-            "inputs",
-            "transmission_lines.tab",
-        ),
+        os.path.join(scenario_directory, str(subproblem), str(stage), "inputs",
+                     "transmission_lines.tab"),
         sep="\t",
-        usecols=["transmission_line", "tx_operational_type", "tx_simple_loss_factor"],
+        usecols=["TRANSMISSION_LINES", "tx_operational_type",
+                 "tx_simple_loss_factor"]
     )
     df = df[df["tx_operational_type"] == "tx_simple"]
 
     # Dict of loss factor by tx_simple line based on raw data
-    loss_factor_raw = dict(zip(df["transmission_line"], df["tx_simple_loss_factor"]))
+    loss_factor_raw = dict(zip(
+        df["TRANSMISSION_LINES"],
+        df["tx_simple_loss_factor"]
+    ))
 
     # Convert loss factors to float and remove any missing data (will
     # default to 0 in the model)

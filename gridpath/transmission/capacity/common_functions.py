@@ -1,4 +1,4 @@
-# Copyright 2016-2023 Blue Marble Analytics LLC. All rights reserved.
+# Copyright 2016-2020 Blue Marble Analytics LLC. All rights reserved.
 from gridpath.auxiliary.auxiliary import load_subtype_modules
 
 
@@ -12,8 +12,6 @@ def load_tx_capacity_type_modules(required_tx_capacity_modules):
     return load_subtype_modules(
         required_subtype_modules=required_tx_capacity_modules,
         package="gridpath.transmission.capacity.capacity_types",
-        required_attributes=[
-            "min_transmission_capacity_rule",
-            "max_transmission_capacity_rule",
-        ],
+        required_attributes=["min_transmission_capacity_rule",
+                             "max_transmission_capacity_rule"]
     )

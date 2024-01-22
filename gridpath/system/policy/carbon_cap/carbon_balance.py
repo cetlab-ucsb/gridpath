@@ -1,4 +1,4 @@
-# Copyright 2016-2023 Blue Marble Analytics LLC.
+# Copyright 2016-2020 Blue Marble Analytics LLC.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,15 +15,18 @@
 """
 Constraint total carbon emissions to be less than cap
 """
+from __future__ import division
+from __future__ import print_function
+
+from builtins import next
+import csv
+import os.path
 
 from pyomo.environ import Var, Constraint, Expression, NonNegativeReals, value
 
-from gridpath.auxiliary.dynamic_components import (
-    carbon_cap_balance_emission_components,
-    carbon_cap_balance_credit_components,
-)
-from gridpath.common_functions import create_results_df
-from gridpath.system.policy.carbon_cap import CARBON_CAP_ZONE_PRD_DF
+from db.common_functions import spin_on_database_lock
+from gridpath.auxiliary.dynamic_components import \
+    carbon_cap_balance_emission_components
 
 
 def add_model_components(m, d, scenario_directory, subproblem, stage):
@@ -39,29 +42,20 @@ def add_model_components(m, d, scenario_directory, subproblem, stage):
     )
 
     def violation_expression_rule(mod, z, p):
-        if mod.carbon_cap_allow_violation[z]:
-            return mod.Carbon_Cap_Overage[z, p]
-        else:
-            return 0
+        return mod.Carbon_Cap_Overage[z, p] * \
+               mod.carbon_cap_allow_violation[z]
 
     m.Carbon_Cap_Overage_Expression = Expression(
-        m.CARBON_CAP_ZONE_PERIODS_WITH_CARBON_CAP, rule=violation_expression_rule
+        m.CARBON_CAP_ZONE_PERIODS_WITH_CARBON_CAP,
+        rule=violation_expression_rule
     )
 
     m.Total_Carbon_Emissions_from_All_Sources_Expression = Expression(
         m.CARBON_CAP_ZONE_PERIODS_WITH_CARBON_CAP,
-        rule=lambda mod, z, p: sum(
-            getattr(mod, component)[z, p]
-            for component in getattr(d, carbon_cap_balance_emission_components)
-        ),
-    )
-
-    m.Total_Carbon_Credits_from_All_Sources_Expression = Expression(
-        m.CARBON_CAP_ZONE_PERIODS_WITH_CARBON_CAP,
-        rule=lambda mod, z, p: sum(
-            getattr(mod, component)[z, p]
-            for component in getattr(d, carbon_cap_balance_credit_components)
-        ),
+        rule=lambda mod, z, p:
+        sum(getattr(mod, component)[z, p] for component
+            in getattr(d, carbon_cap_balance_emission_components)
+            )
     )
 
     def carbon_cap_target_rule(mod, z, p):
@@ -72,18 +66,37 @@ def add_model_components(m, d, scenario_directory, subproblem, stage):
         :param p:
         :return:
         """
-        return (
-            mod.Total_Carbon_Emissions_from_All_Sources_Expression[z, p]
-            - mod.Carbon_Cap_Overage_Expression[z, p]
+        return mod.Total_Carbon_Emissions_from_All_Sources_Expression[z, p] \
+            - mod.Carbon_Cap_Overage_Expression[z, p] \
             <= mod.carbon_cap_target[z, p]
-            + mod.Total_Carbon_Credits_from_All_Sources_Expression[z, p]
-        )
 
     m.Carbon_Cap_Constraint = Constraint(
-        m.CARBON_CAP_ZONE_PERIODS_WITH_CARBON_CAP, rule=carbon_cap_target_rule
+        m.CARBON_CAP_ZONE_PERIODS_WITH_CARBON_CAP,
+        rule=carbon_cap_target_rule
     )
 
-
+    
+    def carbon_cap_period_total_rule(mod, p):
+        """
+        Total carbon emitted must be less than target
+        :param mod:
+        :param z:
+        :param p:
+        :return:
+        """
+        
+        return sum(
+                (mod.Total_Carbon_Emissions_from_All_Sources_Expression[z, p] \
+                - mod.Carbon_Cap_Overage_Expression[z, p] )
+                for z in mod.CARBON_CAP_ZONES)+\
+                mod.Tx_Total_Leakage[p]\
+                <= sum(mod.carbon_cap_target[z, p] for z in mod.CARBON_CAP_ZONES)
+    
+    m.Carbon_Cap_Total_Constraint = Constraint(
+        m.PERIODS,
+        rule=carbon_cap_period_total_rule
+    )
+    
 def export_results(scenario_directory, subproblem, stage, m, d):
     """
 
@@ -94,45 +107,130 @@ def export_results(scenario_directory, subproblem, stage, m, d):
     :param d:
     :return:
     """
-
-    results_columns = [
-        "total_emissions",
-        "total_credits",
-        "dual",
-        "carbon_cap_marginal_cost_per_emission",
-    ]
-    data = [
-        [
-            z,
-            p,
-            value(m.Total_Carbon_Emissions_from_All_Sources_Expression[z, p]),
-            value(m.Total_Carbon_Credits_from_All_Sources_Expression[z, p]),
-            m.dual[getattr(m, "Carbon_Cap_Constraint")[z, p]]
-            if (z, p) in [idx for idx in getattr(m, "Carbon_Cap_Constraint")]
-            else None,
-            (
-                m.dual[getattr(m, "Carbon_Cap_Constraint")[z, p]]
-                / m.period_objective_coefficient[p]
-                if (z, p) in [idx for idx in getattr(m, "Carbon_Cap_Constraint")]
-                else None
-            ),
-        ]
-        for (z, p) in m.CARBON_CAP_ZONE_PERIODS_WITH_CARBON_CAP
-    ]
-    results_df = create_results_df(
-        index_columns=["carbon_cap_zone", "period"],
-        results_columns=results_columns,
-        data=data,
-    )
-
-    for c in results_columns:
-        getattr(d, CARBON_CAP_ZONE_PRD_DF)[c] = None
-    getattr(d, CARBON_CAP_ZONE_PRD_DF).update(results_df)
+    with open(os.path.join(scenario_directory, str(subproblem), str(stage),
+                           "results", "carbon_cap.csv"),
+              "w", newline="") as carbon_cap_results_file:
+        writer = csv.writer(carbon_cap_results_file)
+        writer.writerow(["carbon_cap_zone", "period",
+                         "discount_factor", "number_years_represented",
+                         "carbon_cap_target",
+                         "carbon_emissions",
+                         "carbon_cap_overage"])
+        for (z, p) in m.CARBON_CAP_ZONE_PERIODS_WITH_CARBON_CAP:
+            writer.writerow([
+                z,
+                p,
+                m.discount_factor[p],
+                m.number_years_represented[p],
+                float(m.carbon_cap_target[z, p]),
+                value(m.Total_Carbon_Emissions_from_All_Sources_Expression[z, p]),
+                value(m.Carbon_Cap_Overage_Expression[z, p])
+            ])
 
 
-def save_duals(scenario_directory, subproblem, stage, instance, dynamic_components):
-    instance.constraint_indices["Carbon_Cap_Constraint"] = [
-        "carbon_cap_zone",
-        "period",
-        "dual",
-    ]
+def save_duals(m):
+    m.constraint_indices["Carbon_Cap_Constraint"] = \
+        ["carbon_cap_zone", "period", "dual"]
+
+
+def import_results_into_database(
+        scenario_id, subproblem, stage, c, db, results_directory, quiet
+):
+    """
+
+    :param scenario_id:
+    :param c:
+    :param db:
+    :param results_directory:
+    :param quiet:
+    :return:
+    """
+    if not quiet:
+        print("system carbon emissions (total)")
+    # Carbon emissions from imports
+    # Prior results should have already been cleared by
+    # system.policy.carbon_cap.aggregate_project_carbon_emissions,
+    # then project total emissions imported
+    # Update results_system_carbon_emissions with NULL just in case (instead of
+    # clearing prior results)
+    nullify_sql = """
+        UPDATE results_system_carbon_emissions
+        SET total_emissions = NULL,
+        carbon_cap_overage = NULL
+        WHERE scenario_id = ?
+        AND subproblem_id = ?
+        AND stage_id = ?;
+        """
+    spin_on_database_lock(conn=db, cursor=c, sql=nullify_sql,
+                          data=(scenario_id, subproblem, stage),
+                          many=False)
+
+    results = []
+    with open(os.path.join(results_directory,
+                           "carbon_cap.csv"), "r") as \
+            emissions_file:
+        reader = csv.reader(emissions_file)
+
+        next(reader)  # skip header
+        for row in reader:
+            carbon_cap_zone = row[0]
+            period = row[1]
+            discount_factor = row[2]
+            number_years = row[3]
+            total_emissions = row[5]
+            overage = row[6]
+            
+            results.append(
+                (total_emissions, overage, discount_factor, number_years,
+                 scenario_id, carbon_cap_zone, period,
+                 subproblem, stage)
+            )
+
+    total_sql = """
+        UPDATE results_system_carbon_emissions
+        SET total_emissions = ?,
+        carbon_cap_overage = ?,
+        discount_factor = ?,
+        number_years_represented = ?
+        WHERE scenario_id = ?
+        AND carbon_cap_zone = ?
+        AND period = ?
+        AND subproblem_id = ?
+        AND stage_id = ?;"""
+
+    spin_on_database_lock(conn=db, cursor=c, sql=total_sql, data=results)
+
+    # Update duals
+    duals_results = []
+    with open(os.path.join(results_directory, "Carbon_Cap_Constraint.csv"),
+              "r") as carbon_cap_duals_file:
+        reader = csv.reader(carbon_cap_duals_file)
+
+        next(reader)  # skip header
+
+        for row in reader:
+            duals_results.append(
+                (row[2], row[0], row[1], scenario_id, subproblem, stage)
+            )
+    duals_sql = """ 
+        UPDATE results_system_carbon_emissions
+        SET dual = ?
+        WHERE carbon_cap_zone = ?
+        AND period = ?
+        AND scenario_id = ?
+        AND subproblem_id = ?
+        AND stage_id = ?;"""
+    spin_on_database_lock(conn=db, cursor=c, sql=duals_sql, data=duals_results)
+
+    # Calculate marginal carbon cost per emission
+    mc_sql = """
+        UPDATE results_system_carbon_emissions
+        SET carbon_cap_marginal_cost_per_emission = 
+        dual / (discount_factor * number_years_represented)
+        WHERE scenario_id = ?
+        AND subproblem_id = ?
+        AND stage_id = ?;
+        """
+    spin_on_database_lock(conn=db, cursor=c, sql=mc_sql,
+                          data=(scenario_id, subproblem, stage),
+                          many=False)

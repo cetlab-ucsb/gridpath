@@ -1,4 +1,4 @@
-# Copyright 2016-2023 Blue Marble Analytics LLC.
+# Copyright 2016-2020 Blue Marble Analytics LLC.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -35,27 +35,13 @@ def add_model_components(m, d, scenario_directory, subproblem, stage):
     discount\_factor_p \\times number\_years\_represented_p}`
 
     """
-
     # Add costs to objective function
     def total_capacity_cost_rule(mod):
-        return sum(
-            mod.Capacity_Cost_in_Period[g, p]
-            * mod.discount_factor[p]
-            * mod.number_years_represented[p]
-            for (g, p) in mod.PRJ_FIN_PRDS
-        )
-
+        return sum(mod.Capacity_Cost_in_Period[g, p]
+                   * mod.discount_factor[p]
+                   * mod.number_years_represented[p]
+                   for (g, p) in mod.PRJ_OPR_PRDS)
     m.Total_Capacity_Costs = Expression(rule=total_capacity_cost_rule)
-
-    def total_fixed_cost_rule(mod):
-        return sum(
-            mod.Fixed_Cost_in_Period[g, p]
-            * mod.discount_factor[p]
-            * mod.number_years_represented[p]
-            for (g, p) in mod.PRJ_OPR_PRDS
-        )
-
-    m.Total_Fixed_Costs = Expression(rule=total_fixed_cost_rule)
 
     record_dynamic_components(dynamic_components=d)
 
@@ -67,5 +53,5 @@ def record_dynamic_components(dynamic_components):
     Add total capacity costs to cost components
     """
 
-    getattr(dynamic_components, cost_components).append("Total_Capacity_Costs")
-    getattr(dynamic_components, cost_components).append("Total_Fixed_Costs")
+    getattr(dynamic_components, cost_components).append(
+        "Total_Capacity_Costs")

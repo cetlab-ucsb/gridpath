@@ -1,4 +1,4 @@
-# Copyright 2016-2023 Blue Marble Analytics LLC.
+# Copyright 2016-2020 Blue Marble Analytics LLC.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -53,14 +53,12 @@ def add_model_components(m, d, scenario_directory, subproblem, stage):
         :param mod:
         :return:
         """
-        return sum(
-            mod.Variable_OM_Cost[g, tmp]
-            * mod.hrs_in_tmp[tmp]
-            * mod.tmp_weight[tmp]
-            * mod.number_years_represented[mod.period[tmp]]
-            * mod.discount_factor[mod.period[tmp]]
-            for (g, tmp) in mod.VAR_OM_COST_ALL_PRJS_OPR_TMPS
-        )
+        return sum(mod.Variable_OM_Cost[g, tmp]
+                   * mod.hrs_in_tmp[tmp]
+                   * mod.tmp_weight[tmp]
+                   * mod.number_years_represented[mod.period[tmp]]
+                   * mod.discount_factor[mod.period[tmp]]
+                   for (g, tmp) in mod.VAR_OM_COST_ALL_PRJS_OPR_TMPS)
 
     m.Total_Variable_OM_Cost = Expression(rule=total_variable_om_cost_rule)
 
@@ -71,14 +69,12 @@ def add_model_components(m, d, scenario_directory, subproblem, stage):
         :param mod:
         :return:
         """
-        return sum(
-            mod.Fuel_Cost[g, tmp]
-            * mod.hrs_in_tmp[tmp]
-            * mod.tmp_weight[tmp]
-            * mod.number_years_represented[mod.period[tmp]]
-            * mod.discount_factor[mod.period[tmp]]
-            for (g, tmp) in mod.FUEL_PRJ_OPR_TMPS
-        )
+        return sum(mod.Fuel_Cost[g, tmp]
+                   * mod.hrs_in_tmp[tmp]
+                   * mod.tmp_weight[tmp]
+                   * mod.number_years_represented[mod.period[tmp]]
+                   * mod.discount_factor[mod.period[tmp]]
+                   for (g, tmp) in mod.FUEL_PRJ_OPR_TMPS)
 
     m.Total_Fuel_Cost = Expression(rule=total_fuel_cost_rule)
 
@@ -89,15 +85,13 @@ def add_model_components(m, d, scenario_directory, subproblem, stage):
         :param mod:
         :return:
         """
-        return sum(
-            mod.Startup_Cost[g, tmp]
-            * mod.hrs_in_tmp[tmp]
-            * mod.tmp_weight[tmp]
-            * mod.number_years_represented[mod.period[tmp]]
-            * mod.discount_factor[mod.period[tmp]]
-            for (g, tmp) in mod.STARTUP_COST_PRJ_OPR_TMPS
-        )
-
+        return sum(mod.Startup_Cost[g, tmp]
+                   * mod.hrs_in_tmp[tmp]
+                   * mod.tmp_weight[tmp]
+                   * mod.number_years_represented[mod.period[tmp]]
+                   * mod.discount_factor[mod.period[tmp]]
+                   for (g, tmp)
+                   in mod.STARTUP_COST_PRJ_OPR_TMPS)
     m.Total_Startup_Cost = Expression(rule=total_startup_cost_rule)
 
     def total_shutdown_cost_rule(mod):
@@ -106,15 +100,13 @@ def add_model_components(m, d, scenario_directory, subproblem, stage):
         :param mod:
         :return:
         """
-        return sum(
-            mod.Shutdown_Cost[g, tmp]
-            * mod.hrs_in_tmp[tmp]
-            * mod.tmp_weight[tmp]
-            * mod.number_years_represented[mod.period[tmp]]
-            * mod.discount_factor[mod.period[tmp]]
-            for (g, tmp) in mod.SHUTDOWN_COST_PRJ_OPR_TMPS
-        )
-
+        return sum(mod.Shutdown_Cost[g, tmp]
+                   * mod.hrs_in_tmp[tmp]
+                   * mod.tmp_weight[tmp]
+                   * mod.number_years_represented[mod.period[tmp]]
+                   * mod.discount_factor[mod.period[tmp]]
+                   for (g, tmp)
+                   in mod.SHUTDOWN_COST_PRJ_OPR_TMPS)
     m.Total_Shutdown_Cost = Expression(rule=total_shutdown_cost_rule)
 
     def total_operational_violation_cost_rule(mod):
@@ -122,15 +114,13 @@ def add_model_components(m, d, scenario_directory, subproblem, stage):
         Sum operational constraint violation costs for the objective function
         term.
         """
-        return sum(
-            mod.Operational_Violation_Cost[g, tmp]
-            * mod.hrs_in_tmp[tmp]
-            * mod.tmp_weight[tmp]
-            * mod.number_years_represented[mod.period[tmp]]
-            * mod.discount_factor[mod.period[tmp]]
-            for (g, tmp) in mod.VIOL_ALL_PRJ_OPR_TMPS
-        )
-
+        return sum(mod.Operational_Violation_Cost[g, tmp]
+                   * mod.hrs_in_tmp[tmp]
+                   * mod.tmp_weight[tmp]
+                   * mod.number_years_represented[mod.period[tmp]]
+                   * mod.discount_factor[mod.period[tmp]]
+                   for (g, tmp)
+                   in mod.VIOL_ALL_PRJ_OPR_TMPS)
     m.Total_Operational_Violation_Cost = Expression(
         rule=total_operational_violation_cost_rule
     )
@@ -141,52 +131,14 @@ def add_model_components(m, d, scenario_directory, subproblem, stage):
         :param mod:
         :return:
         """
-        return sum(
-            mod.Curtailment_Cost[g, tmp]
-            * mod.hrs_in_tmp[tmp]
-            * mod.tmp_weight[tmp]
-            * mod.number_years_represented[mod.period[tmp]]
-            * mod.discount_factor[mod.period[tmp]]
-            for (g, tmp) in mod.CURTAILMENT_COST_PRJ_OPR_TMPS
-        )
-
+        return sum(mod.Curtailment_Cost[g, tmp]
+                   * mod.hrs_in_tmp[tmp]
+                   * mod.tmp_weight[tmp]
+                   * mod.number_years_represented[mod.period[tmp]]
+                   * mod.discount_factor[mod.period[tmp]]
+                   for (g, tmp)
+                   in mod.CURTAILMENT_COST_PRJ_OPR_TMPS)
     m.Total_Curtailment_Cost = Expression(rule=total_curtailment_cost_rule)
-
-    def total_soc_penalty_cost_rule(mod):
-        """
-        Sum curtailment costs for the objective function term.
-        :param mod:
-        :return:
-        """
-        return sum(
-            mod.SOC_Penalty_Cost[g, tmp]
-            * mod.hrs_in_tmp[tmp]
-            * mod.tmp_weight[tmp]
-            * mod.number_years_represented[mod.period[tmp]]
-            * mod.discount_factor[mod.period[tmp]]
-            for (g, tmp) in mod.SOC_PENALTY_COST_PRJ_OPR_TMPS
-        )
-
-    m.Total_SOC_Penalty_Cost = Expression(rule=total_soc_penalty_cost_rule)
-
-    def total_soc_last_tmp_penalty_cost_rule(mod):
-        """
-        Sum last tmp penalty costs for the objective function term.
-        :param mod:
-        :return:
-        """
-        return sum(
-            mod.SOC_Penalty_Last_Tmp_Cost[g, tmp]
-            * mod.hrs_in_tmp[tmp]
-            * mod.tmp_weight[tmp]
-            * mod.number_years_represented[mod.period[tmp]]
-            * mod.discount_factor[mod.period[tmp]]
-            for (g, tmp) in mod.SOC_LAST_TMP_PENALTY_COST_PRJ_OPR_TMPS
-        )
-
-    m.Total_SOC_Penalty_Last_Tmp_Cost = Expression(
-        rule=total_soc_last_tmp_penalty_cost_rule
-    )
 
     record_dynamic_components(dynamic_components=d)
 
@@ -198,15 +150,17 @@ def record_dynamic_components(dynamic_components):
     Add operational costs to the objective-function dynamic components.
     """
 
-    getattr(dynamic_components, cost_components).append("Total_Variable_OM_Cost")
-    getattr(dynamic_components, cost_components).append("Total_Fuel_Cost")
-    getattr(dynamic_components, cost_components).append("Total_Startup_Cost")
-    getattr(dynamic_components, cost_components).append("Total_Shutdown_Cost")
+    getattr(dynamic_components, cost_components).append(
+        "Total_Variable_OM_Cost")
+    getattr(dynamic_components, cost_components).append(
+        "Total_Fuel_Cost")
+    getattr(dynamic_components, cost_components).append(
+        "Total_Startup_Cost")
+    getattr(dynamic_components, cost_components).append(
+        "Total_Shutdown_Cost")
     getattr(dynamic_components, cost_components).append(
         "Total_Operational_Violation_Cost"
     )
-    getattr(dynamic_components, cost_components).append("Total_Curtailment_Cost")
-    getattr(dynamic_components, cost_components).append("Total_SOC_Penalty_Cost")
     getattr(dynamic_components, cost_components).append(
-        "Total_SOC_Penalty_Last_Tmp_Cost"
+        "Total_Curtailment_Cost"
     )

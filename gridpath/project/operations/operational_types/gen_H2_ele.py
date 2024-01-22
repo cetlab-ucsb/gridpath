@@ -301,7 +301,7 @@ def max_Gen_H2_ele_discharge_rule(mod, s, tmp):
 
     Storage charging power can't exceed available capacity.
     """
-    return mod.Gen_H2_Ele_Discharge_MW[s, tmp] \
+    return mod.Gen_H2_Ele_Discharge_MW[s, tmp]*mod.gen_H2_ele_discharging_efficiency[s] \
         <= mod.Capacity_MW[s, mod.period[tmp]] \
         * mod.Availability_Derate[s, tmp] \
         * mod.gen_H2_ele_discharging_capacity_multiplier[s]

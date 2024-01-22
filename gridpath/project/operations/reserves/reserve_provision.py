@@ -1,4 +1,4 @@
-# Copyright 2016-2023 Blue Marble Analytics LLC.
+# Copyright 2016-2020 Blue Marble Analytics LLC.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,35 +18,28 @@
 import csv
 import os.path
 import pandas as pd
-from pyomo.environ import Set, Param, Var, NonNegativeReals, PercentFraction, value
+from pyomo.environ import Set, Param, Var, NonNegativeReals, \
+    PercentFraction, value
 
 from db.common_functions import spin_on_database_lock
-from gridpath.auxiliary.validations import write_validation_to_database, validate_idxs
-from gridpath.auxiliary.auxiliary import (
-    check_list_items_are_unique,
-    find_list_item_position,
-    cursor_to_df,
-    subset_init_by_set_membership,
-)
-from gridpath.auxiliary.dynamic_components import (
-    reserve_variable_derate_params,
-    reserve_to_energy_adjustment_params,
-)
-from gridpath.common_functions import create_results_df
-from gridpath.project import PROJECT_TIMEPOINT_DF
+from gridpath.auxiliary.validations import write_validation_to_database, \
+    validate_idxs
+from gridpath.auxiliary.auxiliary import check_list_items_are_unique, \
+    find_list_item_position, cursor_to_df
+from gridpath.auxiliary.db_interface import setup_results_import
+from gridpath.auxiliary.dynamic_components import \
+    reserve_variable_derate_params, \
+    reserve_to_energy_adjustment_params
 
 
 def generic_record_dynamic_components(
-    d,
-    scenario_directory,
-    subproblem,
-    stage,
+    d, scenario_directory, subproblem, stage,
     headroom_or_footroom_dict,
     ba_column_name,
     reserve_provision_variable_name,
     reserve_provision_derate_param_name,
     reserve_to_energy_adjustment_param_name,
-    reserve_balancing_area_param_name,
+    reserve_balancing_area_param_name
 ):
     """
     :param d: the DynamicComponents class we'll be populating
@@ -129,10 +122,11 @@ def generic_record_dynamic_components(
     # to the list of variables in the headroom/footroom dictionary for the
     # project
     with open(
-        os.path.join(
-            scenario_directory, str(subproblem), str(stage), "inputs", "projects.tab"
-        ),
-        "r",
+            os.path.join(
+                scenario_directory, str(subproblem), str(stage),
+                "inputs", "projects.tab"
+            ),
+            "r"
     ) as projects_file:
         projects_file_reader = csv.reader(
             projects_file, delimiter="\t", lineterminator="\n"
@@ -148,7 +142,9 @@ def generic_record_dynamic_components(
             # If we have already added this generator to the head/footroom
             # variables dictionary, move on; otherwise, create the
             # dictionary item
-            if generator not in list(getattr(d, headroom_or_footroom_dict).keys()):
+            if generator not in list(
+                    getattr(d, headroom_or_footroom_dict).keys()
+            ):
                 getattr(d, headroom_or_footroom_dict)[generator] = list()
             # Some generators get the variables associated with
             # provision of various services (e.g. reserves) if flagged
@@ -156,10 +152,10 @@ def generic_record_dynamic_components(
             # is specified ("." = no zone specified, so project does not
             # contribute to this reserve requirement)
             # The names of the reserve variables for each generator
-            if row[find_list_item_position(headers, ba_column_name)[0]] != ".":
+            if row[find_list_item_position(
+                    headers, ba_column_name)[0]] != ".":
                 getattr(d, headroom_or_footroom_dict)[generator].append(
-                    reserve_provision_variable_name
-                )
+                    reserve_provision_variable_name)
 
     # The names of the headroom/footroom derate params for each reserve
     # variable
@@ -178,23 +174,20 @@ def generic_record_dynamic_components(
     # particular reserve
     # TODO: these adjustments are currently only applied in the variable
     #  operational_type and must be added to other operational types
-    getattr(d, reserve_to_energy_adjustment_params)[reserve_provision_variable_name] = (
-        reserve_to_energy_adjustment_param_name,
-        reserve_balancing_area_param_name,
-    )
+    getattr(d, reserve_to_energy_adjustment_params)[
+        reserve_provision_variable_name] = \
+        (reserve_to_energy_adjustment_param_name,
+         reserve_balancing_area_param_name)
 
 
-def generic_add_model_components(
-    m,
-    d,
-    reserve_projects_set,
-    reserve_balancing_area_param,
-    reserve_provision_derate_param,
-    reserve_balancing_areas_set,
-    reserve_project_operational_timepoints_set,
-    reserve_provision_variable_name,
-    reserve_to_energy_adjustment_param,
-):
+def generic_add_model_components(m, d,
+                                 reserve_projects_set,
+                                 reserve_balancing_area_param,
+                                 reserve_provision_derate_param,
+                                 reserve_balancing_areas_set,
+                                 reserve_project_operational_timepoints_set,
+                                 reserve_provision_variable_name,
+                                 reserve_to_energy_adjustment_param):
     """
     :param m:
     :param d:
@@ -211,37 +204,25 @@ def generic_add_model_components(
     """
 
     setattr(m, reserve_projects_set, Set(within=m.PROJECTS))
-    setattr(
-        m,
-        reserve_balancing_area_param,
-        Param(
-            getattr(m, reserve_projects_set),
-            within=getattr(m, reserve_balancing_areas_set),
-        ),
-    )
+    setattr(m, reserve_balancing_area_param,
+            Param(getattr(m, reserve_projects_set),
+                  within=getattr(m, reserve_balancing_areas_set)
+                  )
+            )
 
-    setattr(
-        m,
-        reserve_project_operational_timepoints_set,
-        Set(
-            dimen=2,
-            initialize=lambda mod: subset_init_by_set_membership(
-                mod=mod,
-                superset="PRJ_OPR_TMPS",
-                index=0,
-                membership_set=getattr(mod, reserve_projects_set),
-            ),
-        ),
-    )
+    setattr(m, reserve_project_operational_timepoints_set,
+            Set(dimen=2,
+                initialize=lambda mod:
+                set((g, tmp) for (g, tmp) in mod.PRJ_OPR_TMPS
+                    if g in getattr(mod, reserve_projects_set))
+                )
+            )
 
-    setattr(
-        m,
-        reserve_provision_variable_name,
-        Var(
-            getattr(m, reserve_project_operational_timepoints_set),
-            within=NonNegativeReals,
-        ),
-    )
+    setattr(m, reserve_provision_variable_name,
+            Var(getattr(m, reserve_project_operational_timepoints_set),
+                within=NonNegativeReals
+                )
+            )
 
     # Headroom/footroom derate -- this is how much extra footroom or
     # headroom must be available in order to provide 1 unit of up or down
@@ -250,41 +231,31 @@ def generic_add_model_components(
     # upward reserves is 1/0.5=2 -- twice the reserve that can be provided
     # Defaults to 1 if not specified
     # This param is used by the operational_type modules
-    setattr(
-        m,
-        reserve_provision_derate_param,
-        Param(getattr(m, reserve_projects_set), within=PercentFraction, default=1),
-    )
+    setattr(m, reserve_provision_derate_param,
+            Param(getattr(m, reserve_projects_set),
+                  within=PercentFraction, default=1)
+            )
 
     # Energy adjustment from subhourly reserve provision
     # (e.g. for storage state of charge or how much variable RPS energy is
     # delivered because of subhourly reserve provision)
     # This is an optional param, which will default to 0 if not specified
     # This param is used by the operational_type modules
-    setattr(
-        m,
-        reserve_to_energy_adjustment_param,
-        Param(
-            getattr(m, reserve_balancing_areas_set), within=PercentFraction, default=0
-        ),
-    )
+    setattr(m, reserve_to_energy_adjustment_param,
+            Param(getattr(m, reserve_balancing_areas_set),
+                  within=PercentFraction, default=0)
+            )
 
 
 def generic_load_model_data(
-    m,
-    d,
-    data_portal,
-    scenario_directory,
-    subproblem,
-    stage,
-    ba_column_name,
-    derate_column_name,
-    reserve_balancing_area_param,
-    reserve_provision_derate_param,
-    reserve_projects_set,
-    reserve_to_energy_adjustment_param,
-    reserve_balancing_areas_input_file,
-):
+        m, d, data_portal, scenario_directory, subproblem, stage,
+        ba_column_name,
+        derate_column_name,
+        reserve_balancing_area_param,
+        reserve_provision_derate_param,
+        reserve_projects_set,
+        reserve_to_energy_adjustment_param,
+        reserve_balancing_areas_input_file):
     """
 
     :param m:
@@ -303,35 +274,29 @@ def generic_load_model_data(
     :return:
     """
 
-    columns_to_import = (
-        "project",
-        ba_column_name,
-    )
+    columns_to_import = ("project", ba_column_name,)
     params_to_import = (getattr(m, reserve_balancing_area_param),)
     projects_file_header = pd.read_csv(
-        os.path.join(
-            scenario_directory, str(subproblem), str(stage), "inputs", "projects.tab"
-        ),
-        sep="\t",
-        header=None,
-        nrows=1,
+        os.path.join(scenario_directory, str(subproblem), str(stage), "inputs",
+                     "projects.tab"),
+        sep="\t", header=None, nrows=1
     ).values[0]
 
     # Import reserve provision headroom/footroom de-rate parameter only if
     # column is present
     # Otherwise, the de-rate param goes to its default of 1
     if derate_column_name in projects_file_header:
-        columns_to_import += (derate_column_name,)
+        columns_to_import += (derate_column_name, )
         params_to_import += (getattr(m, reserve_provision_derate_param),)
+    else:
+        pass
 
     # Load the needed data
-    data_portal.load(
-        filename=os.path.join(
-            scenario_directory, str(subproblem), str(stage), "inputs", "projects.tab"
-        ),
-        select=columns_to_import,
-        param=params_to_import,
-    )
+    data_portal.load(filename=os.path.join(scenario_directory, str(subproblem), str(stage),
+                                           "inputs", "projects.tab"),
+                     select=columns_to_import,
+                     param=params_to_import
+                     )
 
     data_portal.data()[reserve_projects_set] = {
         None: list(data_portal.data()[reserve_balancing_area_param].keys())
@@ -341,43 +306,27 @@ def generic_load_model_data(
     # state of charge adjustment or delivered variable RPS energy adjustment)
     # if specified; otherwise it will default to 0
     ba_file_header = pd.read_csv(
-        os.path.join(
-            scenario_directory,
-            str(subproblem),
-            str(stage),
-            "inputs",
-            reserve_balancing_areas_input_file,
-        ),
-        sep="\t",
-        header=None,
-        nrows=1,
+        os.path.join(scenario_directory, str(subproblem), str(stage), "inputs",
+                     reserve_balancing_areas_input_file),
+        sep="\t", header=None, nrows=1
     ).values[0]
 
     if "reserve_to_energy_adjustment" in ba_file_header:
         data_portal.load(
-            filename=os.path.join(
-                scenario_directory,
-                str(subproblem),
-                str(stage),
-                "inputs",
-                reserve_balancing_areas_input_file,
-            ),
-            select=("balancing_area", "reserve_to_energy_adjustment"),
-            param=reserve_to_energy_adjustment_param,
+            filename=os.path.join(scenario_directory, str(subproblem), str(stage), "inputs",
+                                  reserve_balancing_areas_input_file),
+            select=("balancing_area",
+                    "reserve_to_energy_adjustment"),
+            param=reserve_to_energy_adjustment_param
         )
 
 
 def generic_export_results(
-    m,
-    d,
-    scenario_directory,
-    subproblem,
-    stage,
-    module_name,
-    reserve_project_operational_timepoints_set,
-    reserve_provision_variable_name,
-    reserve_ba_param_name,
-):
+        m, d, scenario_directory, subproblem, stage,
+        module_name,
+        reserve_project_operational_timepoints_set,
+        reserve_provision_variable_name,
+        reserve_ba_param_name):
     """
     Export project-level reserves results
     :param m:
@@ -391,43 +340,33 @@ def generic_export_results(
     :param reserve_ba_param_name:
     :return:
     """
-
-    results_columns = [
-        f"{module_name}_ba",
-        f"{module_name}_reserve_provision_mw",
-    ]
-
-    data = [
-        [
-            prj,
-            tmp,
-            getattr(m, reserve_ba_param_name)[prj],
-            value(getattr(m, reserve_provision_variable_name)[prj, tmp]),
-        ]
-        for (prj, tmp) in getattr(m, reserve_project_operational_timepoints_set)
-    ]
-
-    results_df = create_results_df(
-        index_columns=["project", "timepoint"],
-        results_columns=results_columns,
-        data=data,
-    )
-
-    for c in results_columns:
-        getattr(d, PROJECT_TIMEPOINT_DF)[c] = None
-    getattr(d, PROJECT_TIMEPOINT_DF).update(results_df)
+    with open(os.path.join(scenario_directory, str(subproblem), str(stage), "results",
+                           "reserves_provision_" + module_name + ".csv"),
+              "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(["project", "period", "horizon", "timepoint",
+                         "timepoint_weight", "number_of_hours_in_timepoint",
+                         "balancing_area", "load_zone", "technology",
+                         "reserve_provision_mw"])
+        for (p, tmp) in getattr(m, reserve_project_operational_timepoints_set):
+            writer.writerow([
+                p,
+                m.period[tmp],
+                m.horizon[tmp, m.balancing_type_project[p]],
+                tmp,
+                m.tmp_weight[tmp],
+                m.hrs_in_tmp[tmp],
+                getattr(m, reserve_ba_param_name)[p],
+                m.load_zone[p],
+                m.technology[p],
+                value(getattr(m, reserve_provision_variable_name)[p, tmp])
+            ])
 
 
 def generic_get_inputs_from_database(
-    scenario_id,
-    subscenarios,
-    subproblem,
-    stage,
-    conn,
-    reserve_type,
-    project_ba_subscenario_id,
-    ba_subscenario_id,
-):
+        scenario_id, subscenarios, subproblem, stage, conn,
+        reserve_type, project_ba_subscenario_id, ba_subscenario_id
+        ):
     """
 
     :param subscenarios:
@@ -441,8 +380,7 @@ def generic_get_inputs_from_database(
     """
     # Get project BA
     c1 = conn.cursor()
-    project_bas = c1.execute(
-        """
+    project_bas = c1.execute("""
         SELECT project, {}_ba
         FROM
         -- Get projects from portfolio only
@@ -481,8 +419,7 @@ def generic_get_inputs_from_database(
 
     # Get headroom/footroom derate
     c2 = conn.cursor()
-    project_derates = c2.execute(
-        """
+    project_derates = c2.execute("""
         SELECT project, {}_derate
         FROM
         -- Get projects from portfolio only
@@ -509,14 +446,8 @@ def generic_get_inputs_from_database(
 
 
 def generic_validate_project_bas(
-    scenario_id,
-    subscenarios,
-    subproblem,
-    stage,
-    conn,
-    reserve_type,
-    project_ba_subscenario_id,
-    ba_subscenario_id,
+        scenario_id, subscenarios, subproblem, stage, conn,
+        reserve_type, project_ba_subscenario_id, ba_subscenario_id
 ):
     """
 
@@ -541,7 +472,7 @@ def generic_validate_project_bas(
         conn=conn,
         reserve_type=reserve_type,
         project_ba_subscenario_id=project_ba_subscenario_id,
-        ba_subscenario_id=ba_subscenario_id,
+        ba_subscenario_id=ba_subscenario_id
     )
 
     # Convert input data into pandas DataFrame
@@ -560,7 +491,7 @@ def generic_validate_project_bas(
             reserve_type,
             reserve_type,
             reserve_type,
-            subscenarios.REGULATION_UP_BA_SCENARIO_ID,
+            subscenarios.REGULATION_UP_BA_SCENARIO_ID
         )
     )
     bas = [b[0] for b in bas]  # convert to list
@@ -574,12 +505,11 @@ def generic_validate_project_bas(
         gridpath_module=__name__,
         db_table="inputs_project_{}_bas".format(reserve_type),
         severity="High",
-        errors=validate_idxs(
-            actual_idxs=bas_w_project,
-            req_idxs=bas,
-            idx_label="{}_ba".format(reserve_type),
-            msg="Each reserve BA needs at least 1 " "project assigned to it.",
-        ),
+        errors=validate_idxs(actual_idxs=bas_w_project,
+                             req_idxs=bas,
+                             idx_label="{}_ba".format(reserve_type),
+                             msg="Each reserve BA needs at least 1 "
+                                 "project assigned to it.")
     )
 
     # Check that all projects w derates have a BA specified
@@ -592,10 +522,86 @@ def generic_validate_project_bas(
         gridpath_module=__name__,
         db_table="inputs_project_operational_chars",
         severity="Low",
-        errors=validate_idxs(
-            actual_idxs=projects_w_ba,
-            req_idxs=projects_w_derate,
-            idx_label="project",
-            msg=msg,
-        ),
+        errors=validate_idxs(actual_idxs=projects_w_ba,
+                             req_idxs=projects_w_derate,
+                             idx_label="project",
+                             msg=msg)
     )
+
+
+def generic_import_results_into_database(
+        scenario_id, subproblem, stage, c, db, results_directory, reserve_type
+):
+    """
+    
+    :param scenario_id: 
+    :param c: 
+    :param db: 
+    :param results_directory: 
+    :param reserve_type: 
+    :return: 
+    """
+    
+    # Delete prior results and create temporary import table for ordering
+    setup_results_import(
+        conn=db, cursor=c,
+        table="results_project_{}""".format(reserve_type),
+        scenario_id=scenario_id, subproblem=subproblem, stage=stage
+    )
+
+    # Load results into the temporary table
+    results = []
+    with open(os.path.join(results_directory,
+                           "reserves_provision_" + reserve_type + ".csv"
+                           ), "r") as reserve_provision_file:
+        reader = csv.reader(reserve_provision_file)
+
+        next(reader)  # skip header
+        for row in reader:
+            project = row[0]
+            period = row[1]
+            horizon = row[2]
+            timepoint = row[3]
+            timepoint_weight = row[4]
+            number_of_hours_in_timepoint = row[5]
+            ba = row[6]
+            load_zone = row[7]
+            technology = row[8]
+            reserve_provision = row[9]
+            
+            results.append(
+                (scenario_id, project, period, subproblem, stage,
+                 horizon, timepoint, timepoint_weight,
+                 number_of_hours_in_timepoint,
+                 ba, load_zone, technology, reserve_provision)
+            )
+
+    insert_temp_sql = """
+        INSERT INTO temp_results_project_{}{}
+        (scenario_id, project, period, subproblem_id, stage_id,
+        horizon, timepoint, timepoint_weight,
+        number_of_hours_in_timepoint,
+        load_zone, {}_ba, technology, 
+        reserve_provision_mw)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+        """.format(reserve_type, scenario_id, reserve_type)
+    spin_on_database_lock(conn=db, cursor=c, sql=insert_temp_sql, data=results)
+
+    # Insert sorted results into permanent results table
+    insert_sql = """
+        INSERT INTO results_project_{}
+        (scenario_id, project, period, subproblem_id, stage_id,
+        horizon, timepoint, timepoint_weight, number_of_hours_in_timepoint, 
+        {}_ba, load_zone, technology, reserve_provision_mw)
+        SELECT
+        scenario_id, project, period, subproblem_id, stage_id, 
+        horizon, timepoint, timepoint_weight, number_of_hours_in_timepoint, 
+        {}_ba, load_zone, technology, reserve_provision_mw
+        FROM temp_results_project_{}{}
+        ORDER BY scenario_id, project, subproblem_id, stage_id, 
+        timepoint;""".format(
+            reserve_type, reserve_type, reserve_type, reserve_type, scenario_id
+        )
+
+    spin_on_database_lock(conn=db, cursor=c, sql=insert_sql, data=(),
+                          many=False)

@@ -1,4 +1,4 @@
-# Copyright 2016-2023 Blue Marble Analytics LLC.
+# Copyright 2016-2020 Blue Marble Analytics LLC.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -46,19 +46,13 @@ def load_model_data(m, d, data_portal, scenario_directory, subproblem, stage):
     :return:
     """
     data_portal.load(
-        filename=os.path.join(
-            scenario_directory,
-            str(subproblem),
-            str(stage),
-            "inputs",
-            "frequency_response_balancing_areas.tab",
-        ),
-        select=("balancing_area", "allow_violation", "violation_penalty_per_mw"),
+        filename=os.path.join(scenario_directory, str(subproblem), str(stage), "inputs",
+                              "frequency_response_balancing_areas.tab"),
+        select=("balancing_area", "allow_violation",
+                "violation_penalty_per_mw"),
         index=m.FREQUENCY_RESPONSE_BAS,
-        param=(
-            m.frequency_response_allow_violation,
-            m.frequency_response_violation_penalty_per_mw,
-        ),
+        param=(m.frequency_response_allow_violation,
+               m.frequency_response_violation_penalty_per_mw)
     )
 
 
@@ -100,9 +94,7 @@ def validate_inputs(scenario_id, subscenarios, subproblem, stage, conn):
     #     scenario_id, subscenarios, subproblem, stage, conn)
 
 
-def write_model_inputs(
-    scenario_directory, scenario_id, subscenarios, subproblem, stage, conn
-):
+def write_model_inputs(scenario_directory, scenario_id, subscenarios, subproblem, stage, conn):
     """
     Get inputs from database and write out the model input
     frequency_response_balancing_areas.tab file.
@@ -115,31 +107,17 @@ def write_model_inputs(
     """
 
     freq_resp_bas = get_inputs_from_database(
-        scenario_id, subscenarios, subproblem, stage, conn
-    )
+        scenario_id, subscenarios, subproblem, stage, conn)
 
-    with open(
-        os.path.join(
-            scenario_directory,
-            str(subproblem),
-            str(stage),
-            "inputs",
-            "frequency_response_balancing_areas.tab",
-        ),
-        "w",
-        newline="",
-    ) as freq_resp_bas_tab_file:
+    with open(os.path.join(scenario_directory, str(subproblem), str(stage), "inputs",
+                           "frequency_response_balancing_areas.tab"), "w", newline="") as \
+            freq_resp_bas_tab_file:
         writer = csv.writer(freq_resp_bas_tab_file, delimiter="\t", lineterminator="\n")
 
         # Write header
-        writer.writerow(
-            [
-                "balancing_area",
-                "allow_violation",
-                "violation_penalty_per_mw",
-                "reserve_to_energy_adjustment",
-            ]
-        )
+        writer.writerow(["balancing_area", "allow_violation",
+                         "violation_penalty_per_mw",
+                         "reserve_to_energy_adjustment"])
 
         for row in freq_resp_bas:
             replace_nulls = ["." if i is None else i for i in row]

@@ -1,0 +1,220 @@
+# Copyright 2016-2020 Blue Marble Analytics LLC.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+"""
+This module aggregates the net power flow in/out of a load zone on all
+transmission lines connected to the load zone to create a load-balance
+production component, and adds it to the load-balance constraint.
+"""
+
+from __future__ import print_function
+
+from builtins import next
+from builtins import str
+import csv
+import os.path
+from pyomo.environ import Expression, value
+
+from db.common_functions import spin_on_database_lock
+from gridpath.auxiliary.db_interface import setup_results_import
+from gridpath.auxiliary.dynamic_components import \
+    ccs_balance_production_components, ccs_balance_consumption_components
+
+
+def add_model_components(m, d, scenario_directory, subproblem, stage):
+    """
+    Add net transmitted power to load balance
+    :param m:
+    :param d:
+    :return:
+    """
+
+    def total_transmission_ccs_to_rule(mod, z, tmp):
+        """
+        For each load zone, iterate over the transmission lines with the
+        load zone as destination to determine net imports into the load zone
+        minus any losses incurred. Tx_Losses_LZ_To_MW is positive when
+        Transmit_Power_MW is positive (losses are accounted for when the
+        transmission flow is to the destination load zone) and 0 otherwise.
+        """
+        
+        return sum(
+            (mod.Transmit_CCS_Tonne[tx, tmp]
+             - mod.Tx_Losses_LZ_CCS_Tonne[tx, tmp])
+            for tx in mod.TX_LINES_OPR_IN_TMP[tmp]
+            if mod.load_zone_to[tx] == z
+        )
+        '''
+        return sum(mod.Transmit_CCS_Tonne[tx, tmp]
+            for tx in mod.TX_LINES_OPR_IN_TMP[tmp]
+            if mod.load_zone_to[tx] == z
+        )
+        '''
+    m.Transmission_CCS_to_Zone_Tonne = Expression(m.LOAD_ZONES, m.TMPS,
+                                           rule=total_transmission_ccs_to_rule)
+
+    def total_transmission_ccs_from_rule(mod, z, tmp):
+        """
+        For each load zone, iterate over the transmission lines with the
+        load zone as origin to determine net exports from the load zone
+        minus any losses incurred. Tx_Losses_LZ_From_MW is positive when
+        Transmit_Power_MW is negative (losses are accounted for when the
+        transmission flow is to the origin load zone) and 0 otherwise.
+        """
+        '''
+        return sum(
+            (mod.Transmit_CCS_Tonne[tx, tmp]
+             + mod.Tx_Losses_LZ_CCS_From_Tonne[tx, tmp])
+            for tx in mod.TX_LINES_OPR_IN_TMP[tmp]
+            if mod.load_zone_from[tx] == z
+        )
+        '''
+
+        return sum(mod.Transmit_CCS_Tonne[tx, tmp]
+            for tx in mod.TX_LINES_OPR_IN_TMP[tmp]
+            if mod.load_zone_from[tx] == z
+        )
+        
+        
+    m.Transmission_CCS_from_Zone_Tonne = Expression(m.LOAD_ZONES, m.TMPS,
+                                             rule=total_transmission_ccs_from_rule)
+
+    record_dynamic_components(dynamic_components=d)
+
+
+def record_dynamic_components(dynamic_components):
+    """
+    :param dynamic_components:
+    :return:
+
+    This method adds the transmission to/from to the load balance dynamic
+    components.
+    """
+
+    getattr(dynamic_components, ccs_balance_production_components).append(
+        "Transmission_CCS_to_Zone_Tonne"
+    )
+
+    getattr(dynamic_components, ccs_balance_consumption_components).append(
+        "Transmission_CCS_from_Zone_Tonne"
+    )
+
+
+def export_results(scenario_directory, subproblem, stage, m, d):
+    """
+    Export zone-level imports and exports
+    :param scenario_directory:
+    :param stage:
+    :param stage:
+    :param m:
+    :param d:
+    :return:
+    """
+
+    with open(os.path.join(scenario_directory, str(subproblem), str(stage), "results",
+                           "imports_exports_ccs.csv"), "w", newline="") as imp_exp_file:
+        writer = csv.writer(imp_exp_file)
+        writer.writerow(
+            ["load_zone", "timepoint", "period", "timepoint_weight",
+             "number_of_hours_in_timepoint",
+             "imports_tonne", "exports_tonne", "net_imports_tonne"]
+        )
+        for z in m.LOAD_ZONES:
+            for tmp in m.TMPS:
+                writer.writerow([
+                    z,
+                    tmp,
+                    m.period[tmp],
+                    m.tmp_weight[tmp],
+                    m.hrs_in_tmp[tmp],
+                    value(m.Transmission_CCS_to_Zone_Tonne[z, tmp]),
+                    value(m.Transmission_CCS_from_Zone_Tonne[z, tmp]),
+                    (value(m.Transmission_CCS_to_Zone_Tonne[z, tmp]) -
+                        value(m.Transmission_CCS_from_Zone_Tonne[z, tmp]))
+                ])
+
+'''
+def import_results_into_database(
+        scenario_id, subproblem, stage, c, db, results_directory, quiet
+):
+    """
+
+    :param scenario_id:
+    :param c:
+    :param db:
+    :param results_directory:
+    :param quiet:
+    :return:
+    """
+    if not quiet:
+        print("imports and exports")
+
+    # Delete prior results and create temporary import table for ordering
+    setup_results_import(
+        conn=db, cursor=c,
+        table="results_transmission_imports_exports",
+        scenario_id=scenario_id, subproblem=subproblem, stage=stage
+    )
+    
+    # Load results into the temporary table
+    results = []
+    with open(os.path.join(results_directory,
+                           "imports_exports.csv"),
+              "r") as tx_op_file:
+        reader = csv.reader(tx_op_file)
+
+        next(reader)  # skip header
+        for row in reader:
+            load_zone = row[0]
+            timepoint = row[1]
+            period = row[2]
+            timepoint_weight = row[3]
+            number_of_hours_in_timepoint = row[4]
+            imports_mw = row[5]
+            exports_mw = row[6]
+            net_imports_mw = row[7]
+            
+            results.append(
+                (scenario_id, load_zone, period, subproblem, stage,
+                 timepoint, timepoint_weight,
+                 number_of_hours_in_timepoint,
+                 imports_mw, exports_mw, net_imports_mw)
+            )
+            
+    insert_temp_sql = """
+        INSERT INTO temp_results_transmission_imports_exports{}
+        (scenario_id, load_zone, period, subproblem_id, stage_id, 
+        timepoint, timepoint_weight, 
+        number_of_hours_in_timepoint, 
+        imports_mw, exports_mw, net_imports_mw)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+        """.format(scenario_id)
+    spin_on_database_lock(conn=db, cursor=c, sql=insert_temp_sql, data=results)
+
+    # Insert sorted results into permanent results table
+    insert_sql = """
+        INSERT INTO results_transmission_imports_exports
+        (scenario_id, load_zone, period, subproblem_id, stage_id, 
+        timepoint, timepoint_weight, number_of_hours_in_timepoint,
+        imports_mw, exports_mw, net_imports_mw)
+        SELECT
+        scenario_id, load_zone, period, subproblem_id, stage_id, 
+        timepoint, timepoint_weight, number_of_hours_in_timepoint,
+        imports_mw, exports_mw, net_imports_mw
+        FROM temp_results_transmission_imports_exports{}
+        ORDER BY scenario_id, load_zone, subproblem_id, stage_id, timepoint;
+        """.format(scenario_id)
+    spin_on_database_lock(conn=db, cursor=c, sql=insert_sql, data=(),
+                          many=False)
+'''

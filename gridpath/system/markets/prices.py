@@ -1,4 +1,4 @@
-# Copyright 2016-2023 Blue Marble Analytics LLC.
+# Copyright 2016-2020 Blue Marble Analytics LLC.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,24 +18,28 @@ from pyomo.environ import Param, Reals
 
 
 def add_model_components(m, d, scenario_directory, subproblem, stage):
-    """ """
+    """
+
+    """
     # Price by market and timepoint
     # Prices are allowed to be negative
-    m.market_price = Param(m.MARKETS, m.TMPS, within=Reals)
+    m.market_price = Param(
+        m.MARKETS, m.TMPS,
+        within=Reals
+    )
 
 
 def load_model_data(m, d, data_portal, scenario_directory, subproblem, stage):
-    """ """
+    """
+
+    """
 
     data_portal.load(
         filename=os.path.join(
-            scenario_directory,
-            str(subproblem),
-            str(stage),
-            "inputs",
-            "market_prices.tab",
+            scenario_directory, str(subproblem), str(stage), "inputs",
+            "market_prices.tab"
         ),
-        param=m.market_price,
+        param=m.market_price
     )
 
 
@@ -62,34 +66,26 @@ def get_inputs_from_database(scenario_id, subscenarios, subproblem, stage, conn)
         ) as market_tbl
         -- Get prices for included timepoints only
         CROSS JOIN (
-            SELECT stage_id, timepoint from inputs_temporal
+            SELECT timepoint from inputs_temporal
             WHERE temporal_scenario_id = ?
-            AND subproblem_id = ?
-            AND stage_id = ?
         ) as tmp_tbl
         LEFT OUTER JOIN (
-            SELECT market, stage_id, timepoint, market_price
+            SELECT market, timepoint, market_price
             FROM inputs_market_prices
             WHERE market_price_scenario_id = ?
         ) as price_tbl
-        USING (market, stage_id, timepoint)
+        USING (market, timepoint)
         ;
         """,
-        (
-            subscenarios.MARKET_SCENARIO_ID,
-            subscenarios.TEMPORAL_SCENARIO_ID,
-            subproblem,
-            stage,
-            subscenarios.MARKET_PRICE_SCENARIO_ID,
-        ),
+        (subscenarios.MARKET_SCENARIO_ID,
+         subscenarios.TEMPORAL_SCENARIO_ID,
+         subscenarios.MARKET_PRICE_SCENARIO_ID)
     )
 
     return prices
 
 
-def write_model_inputs(
-    scenario_directory, scenario_id, subscenarios, subproblem, stage, conn
-):
+def write_model_inputs(scenario_directory, scenario_id, subscenarios, subproblem, stage, conn):
     """
     :param scenario_directory: string, the scenario directory
     :param subscenarios: SubScenarios object with all subscenario info
@@ -106,19 +102,13 @@ def write_model_inputs(
     )
 
     with open(
-        os.path.join(
-            scenario_directory,
-            str(subproblem),
-            str(stage),
-            "inputs",
-            "market_prices.tab",
-        ),
-        "w",
-        newline="",
+            os.path.join(
+                scenario_directory, str(subproblem), str(stage), "inputs",
+                "market_prices.tab"
+            ), "w", newline=""
     ) as f:
         writer = csv.writer(f, delimiter="\t", lineterminator="\n")
 
         writer.writerow(["market", "timepoint", "price"])
         for row in prices:
-            replace_nulls = ["." if i is None else i for i in row]
-            writer.writerow(replace_nulls)
+            writer.writerow(row)

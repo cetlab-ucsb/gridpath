@@ -1,4 +1,4 @@
-# Copyright 2016-2023 Blue Marble Analytics LLC.
+# Copyright 2016-2020 Blue Marble Analytics LLC.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -40,15 +40,19 @@ def add_model_components(m, d, scenario_directory, subproblem, stage):
         :return:
         """
         return sum(
-            (mod.Ramp_Up_Tuning_Cost[g, tmp] + mod.Ramp_Down_Tuning_Cost[g, tmp])
+            (mod.Ramp_Up_Tuning_Cost[g, tmp] +
+             mod.Ramp_Down_Tuning_Cost[g, tmp])
             * mod.hrs_in_tmp[tmp]
             * mod.tmp_weight[tmp]
             * mod.number_years_represented[mod.period[tmp]]
             * mod.discount_factor[mod.period[tmp]]
-            for (g, tmp) in mod.PRJ_OPR_TMPS
+            for (g, tmp)
+            in mod.PRJ_OPR_TMPS
         )
 
-    m.Total_Ramp_Tuning_Cost = Expression(rule=total_ramp_tuning_cost_rule)
+    m.Total_Ramp_Tuning_Cost = Expression(
+        rule=total_ramp_tuning_cost_rule
+    )
 
     record_dynamic_components(dynamic_components=d)
 
@@ -60,4 +64,5 @@ def record_dynamic_components(dynamic_components):
     Add tuning costs to cost components
     """
 
-    getattr(dynamic_components, cost_components).append("Total_Ramp_Tuning_Cost")
+    getattr(dynamic_components, cost_components).append(
+        "Total_Ramp_Tuning_Cost")

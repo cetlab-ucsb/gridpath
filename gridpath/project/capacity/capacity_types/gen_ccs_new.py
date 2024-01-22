@@ -454,7 +454,7 @@ def load_model_data(
                                   "new_build_generator_ccs_vintage_costs.tab"),
                      index=m.GEN_CCS_NEW_VNTS,
                      select=("project", "vintage",
-                             "lifetime_yrs","ccs_lifetime_yrs","annualized_real_cost_per_mw_yr","annualized_ccs_real_cost_per_tonne_yr"),
+                             "lifetime_yrs","ccs_lifetime_yrs","annualized_real_cost_per_mw_yr","annualized_real_cost_per_tonne_yr"),
                      param=(m.gen_ccs_new_gen_lifetime_yrs_by_vintage,
                             m.gen_ccs_new_ccs_lifetime_yrs_by_vintage,
                             m.gen_ccs_new_gen_annualized_real_cost_per_mw_yr,
@@ -644,7 +644,7 @@ def get_model_inputs_from_database(
 
     new_gen_costs = c.execute(
         """SELECT project, vintage, lifetime_yrs, ccs_lifetime_yrs,
-        annualized_real_cost_per_mw_yr, annualized_ccs_real_cost_per_tonne_yr"""
+        annualized_real_cost_per_mw_yr, annualized_real_cost_per_tonne_yr"""
         + get_potentials[0] +
         """FROM inputs_project_portfolios
         CROSS JOIN
@@ -654,7 +654,7 @@ def get_model_inputs_from_database(
         INNER JOIN
         (SELECT project, vintage, lifetime_yrs, ccs_lifetime_yrs,
         annualized_real_cost_per_mw_yr,
-        annualized_ccs_real_cost_per_tonne_yr
+        annualized_real_cost_per_tonne_yr
         FROM inputs_project_new_cost
         WHERE project_new_cost_scenario_id = {}) as cost
         USING (project, vintage)""".format(
@@ -697,7 +697,7 @@ def write_model_inputs(
         # Write header
         writer.writerow(
             ["project", "vintage", "ccs_lifetime_yrs", "lifetime_yrs",
-             "annualized_real_cost_per_mw_yr","annualized_ccs_real_cost_per_tonne_yr"] +
+             "annualized_real_cost_per_mw_yr","annualized_real_cost_per_tonne_yr"] +
             ([] if subscenarios.PROJECT_NEW_POTENTIAL_SCENARIO_ID is None
              else ["min_cumulative_new_build_mw", "max_cumulative_new_build_mw"]
              )
@@ -728,7 +728,7 @@ def import_results_into_database(
     update_capacity_results_table(
         db=db, c=c, results_directory=results_directory,
         scenario_id=scenario_id, subproblem=subproblem, stage=stage,
-        results_file="capacity_gen_new_lin.csv"
+        results_file="capacity_gen_ccs_new.csv"
     )
 
 

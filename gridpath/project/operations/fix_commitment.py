@@ -1,4 +1,4 @@
-# Copyright 2016-2023 Blue Marble Analytics LLC.
+# Copyright 2016-2020 Blue Marble Analytics LLC.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,18 +18,17 @@ stage and imports the commitment variables that were fixed in the previous
 stage.
 """
 
+from builtins import zip
 from csv import writer
 import os.path
 from pandas import read_csv
 from pyomo.environ import Set, Param, NonNegativeReals, Expression
 
 
-from gridpath.auxiliary.auxiliary import (
-    get_required_subtype_modules,
-    check_for_integer_subdirectories,
-    subset_init_by_set_membership,
-)
-from gridpath.project.operations.common_functions import load_operational_type_modules
+from gridpath.auxiliary.auxiliary import get_required_subtype_modules_from_projects_file, \
+    check_for_integer_subdirectories
+from gridpath.project.operations.common_functions import \
+    load_operational_type_modules
 
 
 def add_model_components(m, d, scenario_directory, subproblem, stage):
@@ -94,11 +93,9 @@ def add_model_components(m, d, scenario_directory, subproblem, stage):
 
     # Dynamic Inputs
 
-    required_operational_modules = get_required_subtype_modules(
-        scenario_directory=scenario_directory,
-        subproblem=subproblem,
-        stage=stage,
-        which_type="operational_type",
+    required_operational_modules = get_required_subtype_modules_from_projects_file(
+        scenario_directory=scenario_directory, subproblem=subproblem,
+        stage=stage, which_type="operational_type"
     )
 
     imported_operational_modules = load_operational_type_modules(
@@ -114,28 +111,25 @@ def add_model_components(m, d, scenario_directory, subproblem, stage):
 
     m.FNL_COMMIT_PRJ_OPR_TMPS = Set(
         dimen=2,
-        initialize=lambda mod: subset_init_by_set_membership(
-            mod=mod,
-            superset="PRJ_OPR_TMPS",
-            index=0,
-            membership_set=mod.FNL_COMMIT_PRJS,
-        ),
+        initialize=lambda mod:
+        set((g, tmp) for (g, tmp) in mod.PRJ_OPR_TMPS
+            if g in mod.FNL_COMMIT_PRJS)
     )
 
     m.FXD_COMMIT_PRJ_OPR_TMPS = Set(
         dimen=2,
-        initialize=lambda mod: subset_init_by_set_membership(
-            mod=mod,
-            superset="PRJ_OPR_TMPS",
-            index=0,
-            membership_set=mod.FXD_COMMIT_PRJS,
-        ),
+        initialize=lambda mod:
+        set((g, tmp) for (g, tmp) in mod.PRJ_OPR_TMPS
+            if g in mod.FXD_COMMIT_PRJS)
     )
 
     # Input Params
     ###########################################################################
 
-    m.fixed_commitment = Param(m.FXD_COMMIT_PRJ_OPR_TMPS, within=NonNegativeReals)
+    m.fixed_commitment = Param(
+        m.FXD_COMMIT_PRJ_OPR_TMPS,
+        within=NonNegativeReals
+    )
 
     # Expressions
     ###########################################################################
@@ -146,14 +140,17 @@ def add_model_components(m, d, scenario_directory, subproblem, stage):
         **Defined Over**: FNL_COMMIT_PRJ_OPR_TMPS
         """
         gen_op_type = mod.operational_type[g]
-        return imported_operational_modules[gen_op_type].commitment_rule(mod, g, tmp)
+        return imported_operational_modules[gen_op_type].\
+            commitment_rule(mod, g, tmp)
 
-    m.Commitment = Expression(m.FNL_COMMIT_PRJ_OPR_TMPS, rule=commitment_rule)
+    m.Commitment = Expression(
+        m.FNL_COMMIT_PRJ_OPR_TMPS,
+        rule=commitment_rule
+    )
 
 
 # Commitment Functions
 ###############################################################################
-
 
 def fix_variables(m, d, scenario_directory, subproblem, stage):
     """
@@ -169,11 +166,9 @@ def fix_variables(m, d, scenario_directory, subproblem, stage):
     :return:
     """
 
-    required_operational_modules = get_required_subtype_modules(
-        scenario_directory=scenario_directory,
-        subproblem=subproblem,
-        stage=stage,
-        which_type="operational_type",
+    required_operational_modules = get_required_subtype_modules_from_projects_file(
+        scenario_directory=scenario_directory, subproblem=subproblem,
+        stage=stage, which_type="operational_type"
     )
 
     imported_operational_modules = load_operational_type_modules(
@@ -190,7 +185,6 @@ def fix_variables(m, d, scenario_directory, subproblem, stage):
 
 # Input-Output
 ###############################################################################
-
 
 def load_model_data(m, d, data_portal, scenario_directory, subproblem, stage):
     """
@@ -209,14 +203,10 @@ def load_model_data(m, d, data_portal, scenario_directory, subproblem, stage):
     )
 
     fixed_commitment_df = read_csv(
-        os.path.join(
-            scenario_directory,
-            subproblem,
-            "pass_through_inputs",
-            "fixed_commitment.tab",
-        ),
-        sep="\t",
-        dtype={"stage": str},
+        os.path.join(scenario_directory, subproblem,
+                     "pass_through_inputs", "fixed_commitment.tab"),
+        sep='\t',
+        dtype={"stage": str}
     )
 
     # FNL_COMMIT_PRJS
@@ -228,16 +218,11 @@ def load_model_data(m, d, data_portal, scenario_directory, subproblem, stage):
         """
         fnl_commit_prjs = list()
         df = read_csv(
-            os.path.join(
-                scenario_directory,
-                str(subproblem),
-                str(stage),
-                "inputs",
-                "projects.tab",
-            ),
+            os.path.join(scenario_directory, str(subproblem), str(stage),
+                         "inputs", "projects.tab"),
             sep="\t",
             usecols=["project", "last_commitment_stage"],
-            dtype={"last_commitment_stage": str},
+            dtype={"last_commitment_stage": str}
         )
 
         for prj, s in zip(df["project"], df["last_commitment_stage"]):
@@ -245,7 +230,8 @@ def load_model_data(m, d, data_portal, scenario_directory, subproblem, stage):
                 pass
             elif s == stage or stages.index(s) < stages.index(stage):
                 fnl_commit_prjs.append(prj)
-
+            else:
+                pass
         return fnl_commit_prjs
 
     data_portal.data()["FNL_COMMIT_PRJS"] = {None: get_fnl_commit_prjs()}
@@ -258,21 +244,21 @@ def load_model_data(m, d, data_portal, scenario_directory, subproblem, stage):
         # For projects whose final commitment was in a prior stage, get the
         # fixed commitment of the previous stage (by project and timepoint)
         fixed_commitment_df["stage_index"] = fixed_commitment_df.apply(
-            lambda row: stages.index(row["stage"]), axis=1
-        )
+            lambda row: stages.index(row["stage"]), axis=1)
         relevant_commitment_df = fixed_commitment_df[
             fixed_commitment_df["stage_index"] == stages.index(stage) - 1
         ]
-        projects_timepoints = list(
-            zip(relevant_commitment_df["project"], relevant_commitment_df["timepoint"])
-        )
-        fixed_commitment_dict = dict(
-            zip(projects_timepoints, relevant_commitment_df["commitment"])
-        )
+        projects_timepoints = list(zip(relevant_commitment_df["project"],
+                                       relevant_commitment_df["timepoint"]))
+        fixed_commitment_dict = dict(zip(projects_timepoints,
+                                         relevant_commitment_df["commitment"]))
 
         data_portal.data()["FXD_COMMIT_PRJS"] = {None: fxd_commit_prjs}
-        data_portal.data()["FXD_COMMIT_PRJ_OPR_TMPS"] = {None: projects_timepoints}
+        data_portal.data()["FXD_COMMIT_PRJ_OPR_TMPS"] = \
+            {None: projects_timepoints}
         data_portal.data()["fixed_commitment"] = fixed_commitment_dict
+    else:
+        pass
 
 
 def export_pass_through_inputs(scenario_directory, subproblem, stage, m):
@@ -289,54 +275,24 @@ def export_pass_through_inputs(scenario_directory, subproblem, stage, m):
     """
 
     df = read_csv(
-        os.path.join(
-            scenario_directory, str(subproblem), str(stage), "inputs", "projects.tab"
-        ),
+        os.path.join(scenario_directory, str(subproblem), str(stage),
+                     "inputs", "projects.tab"),
         sep="\t",
-        usecols=["project", "last_commitment_stage"],
+        usecols=["project", "last_commitment_stage"]
     )
 
-    final_commitment_stage_dict = dict(zip(df["project"], df["last_commitment_stage"]))
+    final_commitment_stage_dict = dict(
+        zip(df["project"], df["last_commitment_stage"])
+    )
 
-    with open(
-        os.path.join(
-            scenario_directory,
-            subproblem,
-            "pass_through_inputs",
-            "fixed_commitment.tab",
-        ),
-        "a",
-    ) as fixed_commitment_file:
-        fixed_commitment_writer = writer(
-            fixed_commitment_file, delimiter="\t", lineterminator="\n"
-        )
-        for g, tmp in m.FNL_COMMIT_PRJ_OPR_TMPS:
+    with open(os.path.join(scenario_directory, subproblem,
+                           "pass_through_inputs", "fixed_commitment.tab"),
+              "a") as fixed_commitment_file:
+        fixed_commitment_writer = writer(fixed_commitment_file,
+                                         delimiter="\t",
+                                         lineterminator="\n")
+        for (g, tmp) in m.FNL_COMMIT_PRJ_OPR_TMPS:
             fixed_commitment_writer.writerow(
-                [
-                    g,
-                    tmp,
-                    stage,
-                    final_commitment_stage_dict[g],
-                    m.Commitment[g, tmp].expr.value,
-                ]
+                [g, tmp, stage, final_commitment_stage_dict[g],
+                 m.Commitment[g, tmp].expr.value]
             )
-
-
-def write_pass_through_file_headers(pass_through_directory):
-    with open(
-        os.path.join(pass_through_directory, "fixed_commitment.tab"),
-        "w",
-        newline="",
-    ) as fixed_commitment_file:
-        fixed_commitment_writer = writer(
-            fixed_commitment_file, delimiter="\t", lineterminator="\n"
-        )
-        fixed_commitment_writer.writerow(
-            [
-                "project",
-                "timepoint",
-                "stage",
-                "final_commitment_stage",
-                "commitment",
-            ]
-        )

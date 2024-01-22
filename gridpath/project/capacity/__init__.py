@@ -1,4 +1,4 @@
-# Copyright 2016-2023 Blue Marble Analytics LLC.
+# Copyright 2016-2020 Blue Marble Analytics LLC.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,36 +17,3 @@ This package contains modules to describe the available capacity and the
 capacity-associated costs of generation, storage, and demand-side
 infrastructure 'projects' in the optimization problem.
 """
-
-import os.path
-import pandas as pd
-
-from db.common_functions import spin_on_database_lock_generic
-from gridpath.auxiliary.db_interface import import_csv
-
-
-# Database
-###############################################################################
-
-
-def import_results_into_database(
-    scenario_id, subproblem, stage, c, db, results_directory, quiet
-):
-    """
-    :param scenario_id:
-    :param c:
-    :param db:
-    :param results_directory:
-    :param quiet:
-    :return:
-    """
-    import_csv(
-        conn=db,
-        cursor=c,
-        scenario_id=scenario_id,
-        subproblem=subproblem,
-        stage=stage,
-        quiet=quiet,
-        results_directory=results_directory,
-        which_results="project_period",
-    )

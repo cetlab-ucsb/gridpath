@@ -1,4 +1,4 @@
-# Copyright 2016-2023 Blue Marble Analytics LLC.
+# Copyright 2016-2020 Blue Marble Analytics LLC.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -29,19 +29,16 @@ def add_model_components(m, d, scenario_directory, subproblem, stage):
     :return:
     """
 
+    # TODO: change the name of the expression and of this module
     # Add costs to objective function
-    def total_deliverability_cost_rule(mod):
-        return sum(
-            mod.Deliverability_Group_Deliverable_Capacity_Cost[g, p]
-            * mod.discount_factor[p]
-            * mod.number_years_represented[p]
-            for g in mod.DELIVERABILITY_GROUPS
-            for p in mod.PERIODS
-        )
-
-    m.Total_PRM_Deliverability_Group_Costs = Expression(
-        rule=total_deliverability_cost_rule
-    )
+    def total_capacity_threshold_cost_rule(mod):
+        return sum(mod.PRM_Group_Costs[g, p]
+                   * mod.discount_factor[p]
+                   * mod.number_years_represented[p]
+                   for g in mod.PRM_COST_GROUPS
+                   for p in mod.PERIODS)
+    m.Total_PRM_Group_Costs = Expression(
+        rule=total_capacity_threshold_cost_rule)
 
     record_dynamic_components(dynamic_components=d)
 
@@ -54,5 +51,4 @@ def record_dynamic_components(dynamic_components):
     """
 
     getattr(dynamic_components, cost_components).append(
-        "Total_PRM_Deliverability_Group_Costs"
-    )
+        "Total_PRM_Group_Costs")

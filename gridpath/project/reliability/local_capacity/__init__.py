@@ -1,4 +1,4 @@
-# Copyright 2016-2023 Blue Marble Analytics LLC.
+# Copyright 2016-2020 Blue Marble Analytics LLC.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,13 +16,14 @@
 Local capacity projects and the zone they contribute to
 """
 
-
+from builtins import next
 import csv
 import os.path
 from pyomo.environ import Param, Set
 
-from gridpath.auxiliary.auxiliary import cursor_to_df, subset_init_by_set_membership
-from gridpath.auxiliary.validations import write_validation_to_database, validate_idxs
+from gridpath.auxiliary.auxiliary import cursor_to_df
+from gridpath.auxiliary.validations import write_validation_to_database, \
+    validate_idxs
 
 
 def add_model_components(m, d, scenario_directory, subproblem, stage):
@@ -39,25 +40,18 @@ def add_model_components(m, d, scenario_directory, subproblem, stage):
         m.LOCAL_CAPACITY_PROJECTS, within=m.LOCAL_CAPACITY_ZONES
     )
 
-    m.LOCAL_CAPACITY_PROJECTS_BY_LOCAL_CAPACITY_ZONE = Set(
-        m.LOCAL_CAPACITY_ZONES,
-        within=m.LOCAL_CAPACITY_PROJECTS,
-        initialize=lambda mod, local_capacity_z: [
-            p
-            for p in mod.LOCAL_CAPACITY_PROJECTS
-            if mod.local_capacity_zone[p] == local_capacity_z
-        ],
-    )
+    m.LOCAL_CAPACITY_PROJECTS_BY_LOCAL_CAPACITY_ZONE = \
+        Set(m.LOCAL_CAPACITY_ZONES, within=m.LOCAL_CAPACITY_PROJECTS,
+            initialize=lambda mod, local_capacity_z:
+            [p for p in mod.LOCAL_CAPACITY_PROJECTS
+             if mod.local_capacity_zone[p] == local_capacity_z])
 
     # Get operational local capacity projects - timepoints combinations
     m.LOCAL_CAPACITY_PRJ_OPR_PRDS = Set(
         within=m.PRJ_OPR_PRDS,
-        initialize=lambda mod: subset_init_by_set_membership(
-            mod=mod,
-            superset="PRJ_OPR_PRDS",
-            index=0,
-            membership_set=mod.LOCAL_CAPACITY_PROJECTS,
-        ),
+        initialize=lambda mod: [(prj, p) for (prj, p) in
+                          mod.PRJ_OPR_PRDS
+                          if prj in mod.LOCAL_CAPACITY_PROJECTS]
     )
 
 
@@ -72,14 +66,14 @@ def load_model_data(m, d, data_portal, scenario_directory, subproblem, stage):
     :param stage:
     :return:
     """
-    data_portal.load(
-        filename=os.path.join(scenario_directory, "inputs", "projects.tab"),
-        select=("project", "local_capacity_zone"),
-        param=(m.local_capacity_zone,),
-    )
+    data_portal.load(filename=os.path.join(scenario_directory,
+                                           "inputs", "projects.tab"),
+                     select=("project", "local_capacity_zone"),
+                     param=(m.local_capacity_zone,)
+                     )
 
-    data_portal.data()["LOCAL_CAPACITY_PROJECTS"] = {
-        None: list(data_portal.data()["local_capacity_zone"].keys())
+    data_portal.data()['LOCAL_CAPACITY_PROJECTS'] = {
+        None: list(data_portal.data()['local_capacity_zone'].keys())
     }
 
 
@@ -113,7 +107,7 @@ def get_inputs_from_database(scenario_id, subscenarios, subproblem, stage, conn)
         """.format(
             subscenarios.PROJECT_PORTFOLIO_SCENARIO_ID,
             subscenarios.PROJECT_LOCAL_CAPACITY_ZONE_SCENARIO_ID,
-            subscenarios.LOCAL_CAPACITY_ZONE_SCENARIO_ID,
+            subscenarios.LOCAL_CAPACITY_ZONE_SCENARIO_ID
         )
     )
 
@@ -145,9 +139,7 @@ def validate_inputs(scenario_id, subscenarios, subproblem, stage, conn):
     zones = c.execute(
         """SELECT local_capacity_zone FROM inputs_geography_local_capacity_zones
         WHERE local_capacity_zone_scenario_id = {}
-        """.format(
-            subscenarios.LOCAL_CAPACITY_ZONE_SCENARIO_ID
-        )
+        """.format(subscenarios.LOCAL_CAPACITY_ZONE_SCENARIO_ID)
     )
     zones = [z[0] for z in zones]  # convert to list
 
@@ -160,21 +152,18 @@ def validate_inputs(scenario_id, subscenarios, subproblem, stage, conn):
         gridpath_module=__name__,
         db_table="inputs_project_local_capacity_zones",
         severity="High",
-        errors=validate_idxs(
-            actual_idxs=zones_w_project,
-            req_idxs=zones,
-            idx_label="local_capacity_zone",
-            msg="Each local capacity zone needs at least 1 project " "assigned to it.",
-        ),
+        errors=validate_idxs(actual_idxs=zones_w_project,
+                             req_idxs=zones,
+                             idx_label="local_capacity_zone",
+                             msg="Each local capacity zone needs at least 1 project "
+                                 "assigned to it.")
     )
 
     # TODO: Currently mismatched zones are filtered out in SQL query so
     #  checking for mismatching zones doesn't really make sense?
 
 
-def write_model_inputs(
-    scenario_directory, scenario_id, subscenarios, subproblem, stage, conn
-):
+def write_model_inputs(scenario_directory, scenario_id, subscenarios, subproblem, stage, conn):
     """
     Get inputs from database and write out the model input
     projects.tab file (to be precise, amend it).
@@ -186,17 +175,12 @@ def write_model_inputs(
     :return:
     """
     project_zones = get_inputs_from_database(
-        scenario_id, subscenarios, subproblem, stage, conn
-    )
+        scenario_id, subscenarios, subproblem, stage, conn)
 
     prj_zones_dict = {p: "." if z is None else z for (p, z) in project_zones}
 
-    with open(
-        os.path.join(
-            scenario_directory, str(subproblem), str(stage), "inputs", "projects.tab"
-        ),
-        "r",
-    ) as projects_file_in:
+    with open(os.path.join(scenario_directory, str(subproblem), str(stage), "inputs", "projects.tab"), "r"
+              ) as projects_file_in:
         reader = csv.reader(projects_file_in, delimiter="\t", lineterminator="\n")
 
         new_rows = list()
@@ -217,12 +201,7 @@ def write_model_inputs(
                 row.append(".")
                 new_rows.append(row)
 
-    with open(
-        os.path.join(
-            scenario_directory, str(subproblem), str(stage), "inputs", "projects.tab"
-        ),
-        "w",
-        newline="",
-    ) as projects_file_out:
+    with open(os.path.join(scenario_directory, str(subproblem), str(stage), "inputs", "projects.tab"), "w", newline="") as \
+            projects_file_out:
         writer = csv.writer(projects_file_out, delimiter="\t", lineterminator="\n")
         writer.writerows(new_rows)

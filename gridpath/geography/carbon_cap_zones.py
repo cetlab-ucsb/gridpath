@@ -1,4 +1,4 @@
-# Copyright 2016-2023 Blue Marble Analytics LLC.
+# Copyright 2016-2020 Blue Marble Analytics LLC.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -32,27 +32,22 @@ def add_model_components(m, d, scenario_directory, subproblem, stage):
 
     m.CARBON_CAP_ZONES = Set()
 
-    m.carbon_cap_allow_violation = Param(m.CARBON_CAP_ZONES, within=Boolean, default=0)
+    m.carbon_cap_allow_violation = Param(
+        m.CARBON_CAP_ZONES, within=Boolean, default=0
+    )
     m.carbon_cap_violation_penalty_per_emission = Param(
         m.CARBON_CAP_ZONES, within=NonNegativeReals, default=0
     )
 
 
 def load_model_data(m, d, data_portal, scenario_directory, subproblem, stage):
-    data_portal.load(
-        filename=os.path.join(
-            scenario_directory,
-            str(subproblem),
-            str(stage),
-            "inputs",
-            "carbon_cap_zones.tab",
-        ),
-        index=m.CARBON_CAP_ZONES,
-        param=(
-            m.carbon_cap_allow_violation,
-            m.carbon_cap_violation_penalty_per_emission,
-        ),
-    )
+
+    data_portal.load(filename=os.path.join(scenario_directory, str(subproblem), str(stage),
+                                           "inputs", "carbon_cap_zones.tab"),
+                     index=m.CARBON_CAP_ZONES,
+                     param=(m.carbon_cap_allow_violation,
+                            m.carbon_cap_violation_penalty_per_emission)
+                     )
 
 
 def get_inputs_from_database(scenario_id, subscenarios, subproblem, stage, conn):
@@ -94,9 +89,7 @@ def validate_inputs(scenario_id, subscenarios, subproblem, stage, conn):
     #     scenario_id, subscenarios, subproblem, stage, conn)
 
 
-def write_model_inputs(
-    scenario_directory, scenario_id, subscenarios, subproblem, stage, conn
-):
+def write_model_inputs(scenario_directory, scenario_id, subscenarios, subproblem, stage, conn):
     """
     Get inputs from database and write out the model input
     carbon_cap_zones.tab file.
@@ -109,26 +102,16 @@ def write_model_inputs(
     """
 
     carbon_cap_zone = get_inputs_from_database(
-        scenario_id, subscenarios, subproblem, stage, conn
-    )
+        scenario_id, subscenarios, subproblem, stage, conn)
 
-    with open(
-        os.path.join(
-            scenario_directory,
-            str(subproblem),
-            str(stage),
-            "inputs",
-            "carbon_cap_zones.tab",
-        ),
-        "w",
-        newline="",
-    ) as carbon_cap_zones_file:
+    with open(os.path.join(scenario_directory, str(subproblem), str(stage), "inputs",
+                           "carbon_cap_zones.tab"), "w", newline="") as \
+            carbon_cap_zones_file:
         writer = csv.writer(carbon_cap_zones_file, delimiter="\t", lineterminator="\n")
 
         # Write header
-        writer.writerow(
-            ["carbon_cap_zone", "allow_violation", "violation_penalty_per_emission"]
-        )
+        writer.writerow(["carbon_cap_zone", "allow_violation",
+                         "violation_penalty_per_emission"])
 
         for row in carbon_cap_zone:
             writer.writerow(row)

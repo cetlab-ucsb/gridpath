@@ -1,4 +1,4 @@
-# Copyright 2016-2023 Blue Marble Analytics LLC.
+# Copyright 2016-2020 Blue Marble Analytics LLC.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,9 +21,6 @@ import os.path
 
 from pyomo.environ import Set, Param, NonNegativeReals
 
-from gridpath.common_functions import create_results_df
-from gridpath.system.reliability.local_capacity import LOCAL_CAPACITY_ZONE_PRD_DF
-
 
 def add_model_components(m, d, scenario_directory, subproblem, stage):
     """
@@ -33,12 +30,11 @@ def add_model_components(m, d, scenario_directory, subproblem, stage):
     :return:
     """
 
-    m.LOCAL_CAPACITY_ZONE_PERIODS_WITH_REQUIREMENT = Set(
-        dimen=2, within=m.LOCAL_CAPACITY_ZONES * m.PERIODS
-    )
+    m.LOCAL_CAPACITY_ZONE_PERIODS_WITH_REQUIREMENT = \
+        Set(dimen=2, within=m.LOCAL_CAPACITY_ZONES * m.PERIODS)
     m.local_capacity_requirement_mw = Param(
-        m.LOCAL_CAPACITY_ZONE_PERIODS_WITH_REQUIREMENT, within=NonNegativeReals
-    )
+        m.LOCAL_CAPACITY_ZONE_PERIODS_WITH_REQUIREMENT,
+        within=NonNegativeReals)
 
 
 def load_model_data(m, d, data_portal, scenario_directory, subproblem, stage):
@@ -52,18 +48,14 @@ def load_model_data(m, d, data_portal, scenario_directory, subproblem, stage):
     :param stage:
     :return:
     """
-    data_portal.load(
-        filename=os.path.join(
-            scenario_directory,
-            str(subproblem),
-            str(stage),
-            "inputs",
-            "local_capacity_requirement.tab",
-        ),
-        index=m.LOCAL_CAPACITY_ZONE_PERIODS_WITH_REQUIREMENT,
-        param=m.local_capacity_requirement_mw,
-        select=("local_capacity_zone", "period", "local_capacity_requirement_mw"),
-    )
+    data_portal.load(filename=os.path.join(scenario_directory, str(subproblem), str(stage),
+                                           "inputs",
+                                           "local_capacity_requirement.tab"),
+                     index=m.LOCAL_CAPACITY_ZONE_PERIODS_WITH_REQUIREMENT,
+                     param=m.local_capacity_requirement_mw,
+                     select=("local_capacity_zone", "period",
+                             "local_capacity_requirement_mw")
+                     )
 
 
 def get_inputs_from_database(scenario_id, subscenarios, subproblem, stage, conn):
@@ -93,7 +85,7 @@ def get_inputs_from_database(scenario_id, subscenarios, subproblem, stage, conn)
         """.format(
             subscenarios.TEMPORAL_SCENARIO_ID,
             subscenarios.LOCAL_CAPACITY_ZONE_SCENARIO_ID,
-            subscenarios.LOCAL_CAPACITY_REQUIREMENT_SCENARIO_ID,
+            subscenarios.LOCAL_CAPACITY_REQUIREMENT_SCENARIO_ID
         )
     )
     return local_capacity_requirement
@@ -114,9 +106,7 @@ def validate_inputs(scenario_id, subscenarios, subproblem, stage, conn):
     #     scenario_id, subscenarios, subproblem, stage, conn
 
 
-def write_model_inputs(
-    scenario_directory, scenario_id, subscenarios, subproblem, stage, conn
-):
+def write_model_inputs(scenario_directory, scenario_id, subscenarios, subproblem, stage, conn):
     """
     Get inputs from database and write out the model input
     local_capacity_requirement.tab file.
@@ -129,23 +119,13 @@ def write_model_inputs(
     """
 
     local_capacity_requirement = get_inputs_from_database(
-        scenario_id, subscenarios, subproblem, stage, conn
-    )
+        scenario_id, subscenarios, subproblem, stage, conn)
 
-    with open(
-        os.path.join(
-            scenario_directory,
-            str(subproblem),
-            str(stage),
-            "inputs",
-            "local_capacity_requirement.tab",
-        ),
-        "w",
-        newline="",
-    ) as local_capacity_requirement_tab_file:
-        writer = csv.writer(
-            local_capacity_requirement_tab_file, delimiter="\t", lineterminator="\n"
-        )
+    with open(os.path.join(scenario_directory, str(subproblem), str(stage), "inputs",
+                           "local_capacity_requirement.tab"), "w", newline="") as \
+            local_capacity_requirement_tab_file:
+        writer = csv.writer(local_capacity_requirement_tab_file,
+                            delimiter="\t", lineterminator="\n")
 
         # Write header
         writer.writerow(
@@ -154,36 +134,3 @@ def write_model_inputs(
 
         for row in local_capacity_requirement:
             writer.writerow(row)
-
-
-def export_results(scenario_directory, subproblem, stage, m, d):
-    """
-
-    :param scenario_directory:
-    :param subproblem:
-    :param stage:
-    :param m:
-    :param d:
-    :return:
-    """
-
-    results_columns = [
-        "local_capacity_requirement_mw",
-    ]
-    data = [
-        [
-            z,
-            p,
-            m.local_capacity_requirement_mw[z, p],
-        ]
-        for (z, p) in m.LOCAL_CAPACITY_ZONE_PERIODS_WITH_REQUIREMENT
-    ]
-    results_df = create_results_df(
-        index_columns=["local_capacity_zone", "period"],
-        results_columns=results_columns,
-        data=data,
-    )
-
-    for c in results_columns:
-        getattr(d, LOCAL_CAPACITY_ZONE_PRD_DF)[c] = None
-    getattr(d, LOCAL_CAPACITY_ZONE_PRD_DF).update(results_df)

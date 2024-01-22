@@ -1,4 +1,4 @@
-# Copyright 2016-2023 Blue Marble Analytics LLC.
+# Copyright 2016-2020 Blue Marble Analytics LLC.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -22,29 +22,28 @@ import pandas as pd
 import traceback
 
 
-def get_required_subtype_modules(
-    scenario_directory, subproblem, stage, which_type, prj_or_tx="project"
+def get_required_subtype_modules_from_projects_file(
+    scenario_directory, subproblem, stage, which_type
 ):
     """
     Get a list of unique types from projects.tab.
     """
-    df = pd.read_csv(
+    project_df = pd.read_csv(
         os.path.join(
-            scenario_directory,
-            str(subproblem),
-            str(stage),
-            "inputs",
-            "{}s.tab".format(prj_or_tx),
+            scenario_directory, str(subproblem), str(stage), "inputs",
+            "projects.tab"
         ),
-        sep="\t",
+        sep="\t"
     )
 
-    required_modules = df[which_type].unique()
+    required_modules = project_df[which_type].unique()
 
     return required_modules
 
 
-def load_subtype_modules(required_subtype_modules, package, required_attributes):
+def load_subtype_modules(
+    required_subtype_modules, package, required_attributes
+):
     """
     Load subtype modules (e.g. capacity types, operational types, etc).
     This function will also check that the subtype modules have certain
@@ -62,17 +61,19 @@ def load_subtype_modules(required_subtype_modules, package, required_attributes)
     imported_subtype_modules = dict()
     for m in required_subtype_modules:
         try:
-            imp_m = import_module("." + m, package=package)
+            imp_m = \
+                import_module(
+                    "." + m,
+                    package=package
+                )
             imported_subtype_modules[m] = imp_m
             for a in required_attributes:
-                if not hasattr(imp_m, a):
+                if hasattr(imp_m, a):
+                    pass
+                else:
                     raise Exception(
-                        "ERROR! No "
-                        + str(a)
-                        + " function in subtype module "
-                        + str(imp_m)
-                        + "."
-                    )
+                        "ERROR! No " + str(a) + " function in subtype module "
+                        + str(imp_m) + ".")
         except ImportError:
             print("ERROR! Unable to import subtype module " + m + ".")
             traceback.print_exc()
@@ -110,25 +111,17 @@ def subset_init_by_param_value(mod, set_name, param_name, param_value):
     :param param_value:
     :return:
     """
-    return list(
-        i for i in getattr(mod, set_name) if getattr(mod, param_name)[i] == param_value
-    )
-
-
-def subset_init_by_set_membership(mod, superset, index, membership_set):
-    """
-    Initialize subset based on membership in another set.
-    """
-    return list(
-        index_tuple
-        for index_tuple in getattr(mod, superset)
-        if index_tuple[index] in membership_set
-    )
+    return [
+        i for i in getattr(mod, set_name)
+        if getattr(mod, param_name)[i] == param_value
+    ]
 
 
 def check_list_has_single_item(l, error_msg):
     if len(l) > 1:
         raise ValueError(error_msg)
+    else:
+        pass
 
 
 def find_list_item_position(l, item):
@@ -154,11 +147,8 @@ def check_list_items_are_unique(l):
         positions = find_list_item_position(l, item)
         check_list_has_single_item(
             l=positions,
-            error_msg="Service "
-            + str(item)
-            + " is specified more than once"
-            + " in generators.tab.",
-        )
+            error_msg="Service " + str(item) + " is specified more than once" +
+            " in generators.tab.")
 
 
 def is_number(s):
@@ -176,7 +166,8 @@ def cursor_to_df(cursor):
     :return:
     """
     df = pd.DataFrame(
-        data=cursor.fetchall(), columns=[s[0] for s in cursor.description]
+        data=cursor.fetchall(),
+        columns=[s[0] for s in cursor.description]
     )
     return df
 
@@ -192,7 +183,8 @@ def check_for_integer_subdirectories(main_directory):
     We do rely on order downstream, so make sure these are sorted.
     """
     subdirectories = sorted(
-        [d for d in next(os.walk(main_directory))[1] if is_integer(d)], key=int
+        [d for d in next(os.walk(main_directory))[1] if is_integer(d)],
+        key=int
     )
 
     # There are subdirectories if the list isn't empty

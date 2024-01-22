@@ -1,0 +1,389 @@
+197
+# Copyright 2016-2020 Blue Marble Analytics LLC.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+"""
+This operational type describes transmission lines whose flows are simulated
+using a linear transport model, i.e. transmission flow is constrained to be
+less than or equal to the line capacity. Line capacity can be defined for
+both transmission flow directions. The user can define losses as a fraction
+of line flow.
+
+"""
+
+import os
+import pandas as pd
+from pyomo.environ import Set, Param, Var, Expression, Constraint, NonNegativeReals, NegativeReals, \
+    Reals, PercentFraction
+
+
+def add_model_components(
+        m, d, scenario_directory, subproblem, stage
+):
+    """
+    The following Pyomo model components are defined in this module:
+
+    +-------------------------------------------------------------------------+
+    | Sets                                                                    |
+    +=========================================================================+
+    | | :code:`TX_SIMPLE`                                                     |
+    |                                                                         |
+    | The set of transmission lines of the :code:`tx_simple` operational      |
+    | type.                                                                   |
+    +-------------------------------------------------------------------------+
+    | | :code:`TX_SIMPLE_OPR_TMPS`                                            |
+    |                                                                         |
+    | Two-dimensional set with transmission lines of the :code:`tx_simple`    |
+    | operational type and their operational timepoints.                      |
+    +-------------------------------------------------------------------------+
+
+    +-------------------------------------------------------------------------+
+    | Params                                                                  |
+    +=========================================================================+
+    | | :code:`tx_simple_loss_factor`                                         |
+    | | *Defined over*: :code:`TX_SIMPLE`                                     |
+    | | *Within*: :code:`PercentFraction`                                     |
+    | | *Default*: :code:`0`                                                  |
+    |                                                                         |
+    | The fraction of power that is lost when transmitted over this line.     |
+    +-------------------------------------------------------------------------+
+
+
+    |
+
+    +-------------------------------------------------------------------------+
+    | Variables                                                               |
+    +=========================================================================+
+    | | :code:`TxSimple_Transmit_Power_MW`                                    |
+    | | *Defined over*: :code:`TX_SIMPLE_OPR_TMPS`                            |
+    | | *Within*: :code:`Reals`                                               |
+    |                                                                         |
+    | The transmission line's power flow in each timepoint in which the line  |
+    | is operational. Negative power means the power flow goes in the         |
+    | opposite direction of the line's defined direction.                     |
+    +-------------------------------------------------------------------------+
+    | | :code:`TxSimple_Losses_LZ_From_MW`                                    |
+    | | *Defined over*: :code:`TX_SIMPLE_OPR_TMPS`                            |
+    | | *Within*: :code:`NonNegativeReals`                                    |
+    |                                                                         |
+    | Losses on the transmission line in each timepoint, which we'll account  |
+    | for in the "from" origin load zone's load balance, i.e. losses incurred |
+    | when power is flowing to the "from" zone.                               |
+    +-------------------------------------------------------------------------+
+    | | :code:`TxSimple_Losses_LZ_To_MW`                                      |
+    | | *Defined over*: :code:`TX_SIMPLE_OPR_TMPS`                            |
+    | | *Within*: :code:`NonNegativeReals`                                    |
+    |                                                                         |
+    | Losses on the transmission line in each timepoint, which we'll account  |
+    | for in the "to" origin load zone's load balance, i.e. losses incurred   |
+    | when power is flowing to the "to" zone.                                 |
+    +-------------------------------------------------------------------------+
+
+    |
+
+    +-------------------------------------------------------------------------+
+    | Constraints                                                             |
+    +=========================================================================+
+    | | :code:`TxSimple_Min_Transmit_Constraint`                              |
+    | | *Defined over*: :code:`TX_SIMPLE_OPR_TMPS`                            |
+    |                                                                         |
+    | Transmitted power should exceed the transmission line's minimum power   |
+    | flow for in every operational timepoint.                                |
+    +-------------------------------------------------------------------------+
+    | | :code:`TxSimple_Max_Transmit_Constraint`                              |
+    | | *Defined over*: :code:`TX_SIMPLE_OPR_TMPS`                            |
+    |                                                                         |
+    | Transmitted power cannot exceed the transmission line's maximum power   |
+    | flow in every operational timepoint.                                    |
+    +-------------------------------------------------------------------------+
+    | | :code:`TxSimple_Losses_LZ_From_Constraint`                            |
+    | | *Defined over*: :code:`TX_SIMPLE_OPR_TMPS`                            |
+    |                                                                         |
+    | Losses to be accounted for in the "from" load zone's load balance are 0 |
+    | when power flow on the line is positive (power flowing from the "from"  |
+    | to the "to" load zone) and must be greater than or equal to  the flow   |
+    | times the loss factor otherwise (power flowing to the "from" load zone).|
+    +-------------------------------------------------------------------------+
+    | | :code:`TxSimple_Losses_LZ_To_Constraint`                              |
+    | | *Defined over*: :code:`TX_SIMPLE_OPR_TMPS`                            |
+    |                                                                         |
+    | Losses to be accounted for in the "to" load zone's load balance are 0   |
+    | when power flow on the line is negative (power flowing from the "to"    |
+    | to the "from" load zone) and must be greater than or equal to the flow  |
+    | times the loss factor otherwise (power flowing to the "to" load zone).  |
+    +-------------------------------------------------------------------------+
+    | | :code:`TxSimple_Max_Losses_From_Constraint`                           |
+    | | *Defined over*: :code:`TX_SIMPLE_OPR_TMPS`                            |
+    |                                                                         |
+    | Losses cannot exceed the maximum transmission flow capacity times the   |
+    | loss factor in each operational timepoint. Provides upper bound on      |
+    | losses.                                                                 |
+    +-------------------------------------------------------------------------+
+    | | :code:`CCSSimple_Max_Losses_To_Constraint`                             |
+    | | *Defined over*: :code:`TX_SIMPLE_OPR_TMPS`                            |
+    |                                                                         |
+    | Losses cannot exceed the maximum transmission flow capacity times the   |
+    | loss factor in each operational timepoint. Provides upper bound on      |
+    | losses.                                                                 |
+    +-------------------------------------------------------------------------+
+
+    """
+
+    # Sets
+    ###########################################################################
+
+    m.CCS_SIMPLE = Set(
+        within=m.TX_LINES,
+        initialize=lambda mod: list(
+            set(l for l in mod.TX_LINES
+                if mod.tx_operational_type[l] == "ccs_simple")
+        )
+    )
+
+    m.CCS_SIMPLE_OPR_TMPS = Set(
+        dimen=2, within=m.TX_OPR_TMPS,
+        initialize=lambda mod: list(
+            set((l, tmp) for (l, tmp) in mod.TX_OPR_TMPS
+                if l in mod.CCS_SIMPLE)
+        )
+    )
+
+    # Params
+    ###########################################################################
+    m.ccs_simple_loss_factor = Param(
+        m.CCS_SIMPLE, within=PercentFraction, default=0
+    )
+    
+    # Variables
+    ###########################################################################
+
+    m.CCSSimple_Transmit_Tonne = Var(
+        m.CCS_SIMPLE_OPR_TMPS,
+        within=NonNegativeReals
+    )
+    '''
+    m.CCSSimple_Losses_LZ_From_Tonne = Var(
+        m.CCS_SIMPLE_OPR_TMPS,
+        within=NegativeReals
+    )
+
+    m.CCSSimple_Losses_LZ_To_Tonne = Var(
+        m.CCS_SIMPLE_OPR_TMPS,
+        within=NegativeReals
+    )
+    '''
+
+    #Expression
+    ##########################
+    m.CCSSimple_Losses_Lz_Tonne = Expression(
+                m.CCS_SIMPLE_OPR_TMPS,
+                rule=losses_ccs_lz_rule)
+        
+    # Constraints
+    ###########################################################################
+    '''
+    m.CCSSimple_Min_Transmit_Constraint = Constraint(
+        m.CCS_SIMPLE_OPR_TMPS,
+        rule=min_ccs_rule
+    )
+    '''
+    m.CCSSimple_Max_Transmit_Constraint = Constraint(
+        m.CCS_SIMPLE_OPR_TMPS,
+        rule=max_ccs_rule
+    )
+    
+    '''
+    m.CCSSimple_Losses_LZ_From_Constraint = Constraint(
+        m.CCS_SIMPLE_OPR_TMPS,
+        rule=losses_ccs_lz_from_rule
+    )
+
+    m.CCSSimple_Losses_LZ_To_Constraint = Constraint(
+        m.CCS_SIMPLE_OPR_TMPS,
+        rule=losses_ccs_lz_to_rule
+    )
+    '''
+    
+    
+# Constraint Formulation Rules
+###############################################################################
+
+# TODO: should these move to operations.py since all transmission op_types
+#  have this constraint?
+def min_ccs_rule(mod, l, tmp):
+    """
+    **Constraint Name**: CCSSimple_Min_Transmit_Constraint
+    **Enforced Over**: TX_SIMPLE_OPR_TMPS
+
+    Transmitted power should exceed the minimum transmission flow capacity in
+    each operational timepoint.
+    """
+    return mod.CCSSimple_Transmit_Tonne[l, tmp] \
+        >= mod.Tx_Min_Capacity_Tonne[l, mod.period[tmp]]
+
+def max_ccs_rule(mod, l, tmp):
+    """
+    **Constraint Name**: TxSimple_Max_Transmit_Constraint
+    **Enforced Over**: TX_SIMPLE_OPR_TMPS
+
+    Transmitted power cannot exceed the maximum transmission flow capacity in
+    each operational timepoint.
+    """
+    return mod.CCSSimple_Transmit_Tonne[l, tmp] \
+        <= mod.Tx_Max_Capacity_Tonne[l, mod.period[tmp]]
+
+def losses_ccs_lz_rule(mod, l, tmp):
+    """
+    **Constraint Name**: TxSimple_Losses_LZ_From_Constraint
+    **Enforced Over**: TX_SIMPLE_OPR_TMPS
+
+    Losses for the 'from' load zone of this transmission line (non-negative
+    variable) must be greater than or equal to the negative of the flow times
+    the loss factor. When the flow on the line is negative, power is flowing
+    to the 'from', so losses are positive. When the flow on the line is
+    positive (i.e. power flowing from the 'from' load zone), losses can be set
+    to zero.
+    If the tx_simple_loss_factor is 0, losses are set to 0.
+    WARNING: since we have a greater than or equal constraint here, whenever
+    tx_simple_loss_factor is not 0, the model can incur line losses that are
+    not actually real.
+    """
+
+    return mod.CCSSimple_Transmit_Tonne[l, tmp] * \
+              mod.ccs_simple_loss_factor[l]
+
+
+def losses_ccs_lz_from_rule(mod, l, tmp):
+    """
+    **Constraint Name**: TxSimple_Losses_LZ_From_Constraint
+    **Enforced Over**: TX_SIMPLE_OPR_TMPS
+
+    Losses for the 'from' load zone of this transmission line (non-negative
+    variable) must be greater than or equal to the negative of the flow times
+    the loss factor. When the flow on the line is negative, power is flowing
+    to the 'from', so losses are positive. When the flow on the line is
+    positive (i.e. power flowing from the 'from' load zone), losses can be set
+    to zero.
+    If the tx_simple_loss_factor is 0, losses are set to 0.
+    WARNING: since we have a greater than or equal constraint here, whenever
+    tx_simple_loss_factor is not 0, the model can incur line losses that are
+    not actually real.
+    """
+    if mod.ccs_simple_loss_factor[l] == 0:
+        return mod.CCSSimple_Losses_LZ_From_Tonne[l, tmp] == 0
+    else:
+        return mod.CCSSimple_Losses_LZ_From_Tonne[l, tmp] <= \
+             mod.CCSSimple_Transmit_Tonne[l, tmp] * \
+              mod.ccs_simple_loss_factor[l]
+
+
+def losses_ccs_lz_to_rule(mod, l, tmp):
+    """
+    **Constraint Name**: Simple_Losses_LZ_To_Constraint
+    **Enforced Over**: TX_SIMPLE_OPR_TMPS
+
+    Losses for the 'to' load zone of this transmission line (non-negative
+    variable) must be greater than or equal to the flow times the loss
+    factor. When the flow on the line is positive, power is flowing to the
+    'to' LZ, so losses are positive. When the flow on the line is negative
+    (i.e. power flowing from the 'to' load zone), losses can be set to zero.
+    If the tx_simple_loss_factor is 0, losses are set to 0.
+    WARNING: since we have a greater than or equal constraint here, whenever
+    tx_simple_loss_factor is not 0, the model can incur line losses that are
+    not actually real.
+    """
+    if mod.ccs_simple_loss_factor[l] == 0:
+        return mod.CCSSimple_Losses_LZ_To_Tonne[l, tmp] == 0
+    else:
+        return mod.CCSSimple_Losses_LZ_To_Tonne[l, tmp] <= \
+            -mod.CCSSimple_Transmit_Tonne[l, tmp] * \
+            mod.ccs_simple_loss_factor[l]
+
+
+
+# Transmission Operational Type Methods
+###############################################################################
+
+def transmit_ccs_rule(mod, line, tmp):
+    """
+    The power flow on this transmission line before accounting for losses.
+    """
+    return mod.CCSSimple_Transmit_Tonne[line, tmp]
+
+def transmit_ccs_losses_lz_rule(mod, line, tmp):
+    return mod.CCSSimple_Losses_Lz_Tonne[line, tmp]
+'''
+def transmit_ccs_losses_lz_from_rule(mod, line, tmp):
+    """
+    Transmission losses that we'll account for in the origin 
+    load zone (load_zone_from) of this transmission line. These are zero
+    when the flow is positive (power flowing from the origin load zone) and
+    can be more than 0 when the flow is negative (power flowing to the
+    origin load zone).
+    """
+    return mod.CCSSimple_Losses_LZ_From_Tonne[line, tmp]
+
+
+def transmit_ccs_losses_lz_to_rule(mod, line, tmp):
+    """
+    Transmission losses that we'll account for in the origin 
+    load zone (load_zone_from) of this transmission line. These are zero
+    when the flow is positive (power flowing from the origin load zone) and
+    can be more than 0 when the flow is negative (power flowing to the
+    origin load zone).
+    """
+    return mod.CCSSimple_Losses_LZ_To_Tonne[line, tmp]
+'''   
+
+# Input-Output
+###############################################################################
+
+def load_model_data(m, d, data_portal, scenario_directory,
+                              subproblem, stage):
+    """
+
+    :param m:
+    :param data_portal:
+    :param scenario_directory:
+    :param subproblem:
+    :param stage:
+    :return:
+    """
+
+    # Get the simple transport model lines
+    df = pd.read_csv(
+        os.path.join(scenario_directory, str(subproblem), str(stage), "inputs",
+                     "transmission_lines.tab"),
+        sep="\t",
+        usecols=["TRANSMISSION_LINES", "tx_operational_type",
+                 "tx_simple_loss_factor"]
+    )
+    df = df[df["tx_operational_type"] == "ccs_simple"]
+
+    # Dict of loss factor by tx_simple line based on raw data
+    loss_factor_raw = dict(zip(
+        df["TRANSMISSION_LINES"],
+        df["tx_simple_loss_factor"]
+    ))
+
+    # Convert loss factors to float and remove any missing data (will
+    # default to 0 in the model)
+    loss_factor = {
+        line: float(loss_factor_raw[line])
+        for line in loss_factor_raw
+        if loss_factor_raw[line] != "."
+    }
+
+    # Load data
+    data_portal.data()["ccs_simple_loss_factor"] = loss_factor

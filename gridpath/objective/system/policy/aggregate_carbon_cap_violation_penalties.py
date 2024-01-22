@@ -1,4 +1,4 @@
-# Copyright 2016-2023 Blue Marble Analytics LLC.
+# Copyright 2016-2020 Blue Marble Analytics LLC.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -32,15 +32,13 @@ def add_model_components(m, d, scenario_directory, subproblem, stage):
     """
 
     def total_penalty_costs_rule(mod):
-        return sum(
-            mod.Carbon_Cap_Overage_Expression[z, p]
-            * mod.carbon_cap_violation_penalty_per_emission[z]
-            * mod.number_years_represented[p]
-            * mod.discount_factor[p]
-            for (z, p) in mod.CARBON_CAP_ZONE_PERIODS_WITH_CARBON_CAP
-        )
-
-    m.Total_Carbon_Cap_Balance_Penalty_Costs = Expression(rule=total_penalty_costs_rule)
+        return sum(mod.Carbon_Cap_Overage_Expression[z, p]
+                   * mod.carbon_cap_violation_penalty_per_emission[z]
+                   * mod.number_years_represented[p]
+                   * mod.discount_factor[p]
+                   for (z, p) in mod.CARBON_CAP_ZONE_PERIODS_WITH_CARBON_CAP)
+    m.Total_Carbon_Cap_Balance_Penalty_Costs = Expression(
+        rule=total_penalty_costs_rule)
 
     record_dynamic_components(dynamic_components=d)
 

@@ -1,4 +1,4 @@
-# Copyright 2016-2023 Blue Marble Analytics LLC.
+# Copyright 2016-2020 Blue Marble Analytics LLC.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import absolute_import
 
 from .reserve_aggregation import generic_add_model_components
 
@@ -31,5 +32,5 @@ def add_model_components(m, d, scenario_directory, subproblem, stage):
         "SPINNING_RESERVES_ZONES",
         "SPINNING_RESERVES_PROJECTS",
         "Provide_Spinning_Reserves_MW",
-        "Total_Spinning_Reserves_Provision_MW",
-    )
+        "Total_Spinning_Reserves_Provision_MW"
+        )

@@ -1,4 +1,4 @@
-# Copyright 2016-2023 Blue Marble Analytics LLC.
+# Copyright 2016-2020 Blue Marble Analytics LLC.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -41,20 +41,13 @@ def add_model_components(m, d, scenario_directory, subproblem, stage):
 
 
 def load_model_data(m, d, data_portal, scenario_directory, subproblem, stage):
-    data_portal.load(
-        filename=os.path.join(
-            scenario_directory,
-            str(subproblem),
-            str(stage),
-            "inputs",
-            "energy_target_zones.tab",
-        ),
-        index=m.ENERGY_TARGET_ZONES,
-        param=(
-            m.energy_target_allow_violation,
-            m.energy_target_violation_penalty_per_mwh,
-        ),
-    )
+
+    data_portal.load(filename=os.path.join(scenario_directory, str(subproblem), str(stage),
+                                           "inputs", "energy_target_zones.tab"),
+                     index=m.ENERGY_TARGET_ZONES,
+                     param=(m.energy_target_allow_violation,
+                            m.energy_target_violation_penalty_per_mwh)
+                     )
 
 
 def get_inputs_from_database(scenario_id, subscenarios, subproblem, stage, conn):
@@ -95,9 +88,7 @@ def validate_inputs(scenario_id, subscenarios, subproblem, stage, conn):
     #     scenario_id, subscenarios, subproblem, stage, conn)
 
 
-def write_model_inputs(
-    scenario_directory, scenario_id, subscenarios, subproblem, stage, conn
-):
+def write_model_inputs(scenario_directory, scenario_id, subscenarios, subproblem, stage, conn):
     """
     Get inputs from database and write out the model input
     energy_target_zones.tab file.
@@ -110,28 +101,16 @@ def write_model_inputs(
     """
 
     energy_target_zones = get_inputs_from_database(
-        scenario_id, subscenarios, subproblem, stage, conn
-    )
+        scenario_id, subscenarios, subproblem, stage, conn)
 
-    with open(
-        os.path.join(
-            scenario_directory,
-            str(subproblem),
-            str(stage),
-            "inputs",
-            "energy_target_zones.tab",
-        ),
-        "w",
-        newline="",
-    ) as energy_target_zones_tab_file:
-        writer = csv.writer(
-            energy_target_zones_tab_file, delimiter="\t", lineterminator="\n"
-        )
+    with open(os.path.join(scenario_directory, str(subproblem), str(stage), "inputs", "energy_target_zones.tab"),
+              "w", newline="") as \
+            energy_target_zones_tab_file:
+        writer = csv.writer(energy_target_zones_tab_file, delimiter="\t", lineterminator="\n")
 
         # Write header
-        writer.writerow(
-            ["energy_target_zone", "allow_violation", "violation_penalty_per_mwh"]
-        )
+        writer.writerow(["energy_target_zone", "allow_violation",
+                         "violation_penalty_per_mwh"])
 
         for row in energy_target_zones:
             writer.writerow(row)

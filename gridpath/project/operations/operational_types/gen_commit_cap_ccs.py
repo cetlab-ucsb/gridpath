@@ -424,7 +424,8 @@ def add_model_components(m, d, scenario_directory, subproblem, stage):
 
     m.gen_commit_cap_ccs_ccs_efficiency = Param(
         m.GEN_COMMIT_CAP_CCS,
-        within=PercentFraction
+        within=PercentFraction,
+        default=0.95
         )
 
     m.gen_commit_cap_ccs_ccs_mwh_per_tonne = Param(
@@ -605,11 +606,12 @@ def add_model_components(m, d, scenario_directory, subproblem, stage):
     ###########################################################################
 
     # Commitment and power
+    
     m.Commit_Capacity_CCS_Constraint = Constraint(
         m.GEN_COMMIT_CAP_CCS_OPR_TMPS,
         rule=commit_capacity_constraint_rule
     )
-
+    
     m.GenCommitCap_CCS_Max_Power_Constraint = Constraint(
         m.GEN_COMMIT_CAP_CCS_OPR_TMPS,
         rule=max_power_rule
@@ -619,11 +621,15 @@ def add_model_components(m, d, scenario_directory, subproblem, stage):
         m.GEN_COMMIT_CAP_CCS_OPR_TMPS,
         rule=min_power_rule
     )
-    
+
+    #Asssume power plant can import electricity for CCS
+    '''
     m.Power_Provision_MW_Constraint = Constraint(
         m.GEN_COMMIT_CAP_CCS_OPR_TMPS,
         rule=power_provision_constraint_rule
         )
+    '''
+
     #CCS
     '''
     m.GenCommitCap_CCS_Constraint = Constraint(
@@ -631,10 +637,13 @@ def add_model_components(m, d, scenario_directory, subproblem, stage):
         rule=gen_commit_capacity_ccs_constraint_rule
     )
     '''
+    
+    
     m.Gen_Capacity_CCS_Tonne_Constraint = Constraint(
         m.GEN_COMMIT_CAP_CCS_OPR_TMPS,
         rule=capacity_ccs_max_constraint_rule
     )
+    
     
     # Ramping
     m.Ramp_Up_Off_to_On_CCS_Constraint = Constraint(
@@ -753,6 +762,7 @@ def min_power_rule(mod, g, tmp):
         * mod.gen_commit_cap_ccs_min_stable_level_fraction[g]
 
 
+
 # Add Downward_reserves to this module
 #Downward reserves are not used to provide CCS power, it is only used to provide power
 def power_provision_constraint_rule(mod, g, tmp):
@@ -761,7 +771,7 @@ def power_provision_constraint_rule(mod, g, tmp):
         -mod.GenCommitCap_CCS_Auxiliary_Consumption_MW[g, tmp] \
         -mod.Gen_Capacity_CCS_Tonne[g,tmp]*\
         mod.gen_commit_cap_ccs_ccs_mwh_per_tonne[g] >= 0
-    
+
 #CCS capacity
 '''
 def gen_commit_capacity_ccs_constraint_rule(mod, g, tmp,s):
@@ -1323,12 +1333,15 @@ def power_provision_rule(mod, g, tmp):
     variable constrained to be between the minimum stable level (defined as
     a fraction of committed capacity) and the committed capacity.
     """
+    
     return mod.GenCommitCap_CCS_Provide_Power_MW[g, tmp] - \
         mod.GenCommitCap_CCS_Auxiliary_Consumption_MW[g, tmp] -\
         mod.Gen_Capacity_CCS_Tonne[g,tmp]*\
         mod.gen_commit_cap_ccs_ccs_mwh_per_tonne[g]
-
-
+    '''
+    return mod.GenCommitCap_CCS_Provide_Power_MW[g, tmp] - \
+        mod.GenCommitCap_CCS_Auxiliary_Consumption_MW[g, tmp]
+    '''
 def commitment_rule(mod, g, tmp):
     """
     Number of units committed is the committed capacity divided by the unit

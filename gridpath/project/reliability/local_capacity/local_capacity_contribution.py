@@ -1,4 +1,4 @@
-# Copyright 2016-2023 Blue Marble Analytics LLC.
+# Copyright 2016-2020 Blue Marble Analytics LLC.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,13 +16,16 @@
 Simple local capacity contribution where each local project contributes a 
 fraction of its installed capacity.
 """
+from __future__ import print_function
 
-
+from builtins import next
+from builtins import str
 import csv
 import os.path
 from pyomo.environ import Param, PercentFraction, Expression, value
 
-from gridpath.auxiliary.db_interface import import_csv
+from db.common_functions import spin_on_database_lock
+from gridpath.auxiliary.db_interface import setup_results_import
 
 
 def add_model_components(m, d, scenario_directory, subproblem, stage):
@@ -33,7 +36,8 @@ def add_model_components(m, d, scenario_directory, subproblem, stage):
     :return:
     """
     # The fraction of capacity that counts for the local capacity requirement
-    m.local_capacity_fraction = Param(m.LOCAL_CAPACITY_PROJECTS, within=PercentFraction)
+    m.local_capacity_fraction = Param(m.LOCAL_CAPACITY_PROJECTS,
+                                      within=PercentFraction)
 
     def local_capacity_rule(mod, g, p):
         """
@@ -41,9 +45,10 @@ def add_model_components(m, d, scenario_directory, subproblem, stage):
         :param mod:
         :param g:
         :param p:
-        :return:
+        :return: 
         """
-        return mod.Capacity_MW[g, p] * mod.local_capacity_fraction[g]
+        return mod.Capacity_MW[g, p] \
+            * mod.local_capacity_fraction[g]
 
     m.Local_Capacity_Contribution_MW = Expression(
         m.LOCAL_CAPACITY_PRJ_OPR_PRDS, rule=local_capacity_rule
@@ -61,11 +66,11 @@ def load_model_data(m, d, data_portal, scenario_directory, subproblem, stage):
     :param stage:
     :return:
     """
-    data_portal.load(
-        filename=os.path.join(scenario_directory, "inputs", "projects.tab"),
-        select=("project", "local_capacity_fraction"),
-        param=(m.local_capacity_fraction,),
-    )
+    data_portal.load(filename=os.path.join(scenario_directory,
+                                           "inputs", "projects.tab"),
+                     select=("project", "local_capacity_fraction"),
+                     param=(m.local_capacity_fraction,)
+                     )
 
 
 def export_results(scenario_directory, subproblem, stage, m, d):
@@ -78,43 +83,28 @@ def export_results(scenario_directory, subproblem, stage, m, d):
     :param d:
     :return:
     """
-    with open(
-        os.path.join(
-            scenario_directory,
-            str(subproblem),
-            str(stage),
-            "results",
-            "project_local_capacity.csv",
-        ),
-        "w",
-        newline="",
-    ) as results_file:
+    with open(os.path.join(scenario_directory, str(subproblem), str(stage), "results",
+                           "project_local_capacity_contribution.csv"),
+              "w", newline="") as \
+            results_file:
         writer = csv.writer(results_file)
-        writer.writerow(
-            [
-                "project",
-                "period",
-                "local_capacity_zone",
-                "technology",
-                "load_zone",
-                "capacity_mw",
-                "local_capacity_fraction",
-                "local_capacity_contribution_mw",
-            ]
-        )
-        for prj, period in sorted(m.LOCAL_CAPACITY_PRJ_OPR_PRDS):
-            writer.writerow(
-                [
-                    prj,
-                    period,
-                    m.local_capacity_zone[prj],
-                    m.technology[prj],
-                    m.load_zone[prj],
-                    value(m.Capacity_MW[prj, period]),
-                    value(m.local_capacity_fraction[prj]),
-                    value(m.Local_Capacity_Contribution_MW[prj, period]),
-                ]
-            )
+        writer.writerow(["project", "period", "local_capacity_zone", 
+                         "technology",
+                         "load_zone",
+                         "capacity_mw",
+                         "local_capacity_fraction",
+                         "local_capacity_contribution_mw"])
+        for (prj, period) in m.LOCAL_CAPACITY_PRJ_OPR_PRDS:
+            writer.writerow([
+                prj,
+                period,
+                m.local_capacity_zone[prj],
+                m.technology[prj],
+                m.load_zone[prj],
+                value(m.Capacity_MW[prj, period]),
+                value(m.local_capacity_fraction[prj]),
+                value(m.Local_Capacity_Contribution_MW[prj, period])
+            ])
 
 
 def get_inputs_from_database(scenario_id, subscenarios, subproblem, stage, conn):
@@ -140,7 +130,7 @@ def get_inputs_from_database(scenario_id, subscenarios, subproblem, stage, conn)
         WHERE project_local_capacity_chars_scenario_id = {}) as frac_tbl
         USING (project);""".format(
             subscenarios.PROJECT_LOCAL_CAPACITY_ZONE_SCENARIO_ID,
-            subscenarios.PROJECT_LOCAL_CAPACITY_CHARS_SCENARIO_ID,
+            subscenarios.PROJECT_LOCAL_CAPACITY_CHARS_SCENARIO_ID
         )
     )
 
@@ -163,9 +153,7 @@ def validate_inputs(scenario_id, subscenarios, subproblem, stage, conn):
     # do stuff here to validate inputs
 
 
-def write_model_inputs(
-    scenario_directory, scenario_id, subscenarios, subproblem, stage, conn
-):
+def write_model_inputs(scenario_directory, scenario_id, subscenarios, subproblem, stage, conn):
     """
     Get inputs from database and write out the model input
     projects.tab file (to be precise, amend it).
@@ -177,17 +165,12 @@ def write_model_inputs(
     :return:
     """
     project_frac = get_inputs_from_database(
-        scenario_id, subscenarios, subproblem, stage, conn
-    )
+        scenario_id, subscenarios, subproblem, stage, conn)
 
     prj_frac_dict = {p: "." if f is None else f for (p, f) in project_frac}
 
-    with open(
-        os.path.join(
-            scenario_directory, str(subproblem), str(stage), "inputs", "projects.tab"
-        ),
-        "r",
-    ) as projects_file_in:
+    with open(os.path.join(scenario_directory, str(subproblem), str(stage), "inputs", "projects.tab"), "r"
+              ) as projects_file_in:
         reader = csv.reader(projects_file_in, delimiter="\t", lineterminator="\n")
 
         new_rows = list()
@@ -208,36 +191,81 @@ def write_model_inputs(
                 row.append(".")
                 new_rows.append(row)
 
-    with open(
-        os.path.join(
-            scenario_directory, str(subproblem), str(stage), "inputs", "projects.tab"
-        ),
-        "w",
-        newline="",
-    ) as projects_file_out:
+    with open(os.path.join(scenario_directory, str(subproblem), str(stage), "inputs", "projects.tab"), "w", newline="") as \
+            projects_file_out:
         writer = csv.writer(projects_file_out, delimiter="\t", lineterminator="\n")
         writer.writerows(new_rows)
 
 
 def import_results_into_database(
-    scenario_id, subproblem, stage, c, db, results_directory, quiet
+        scenario_id, subproblem, stage, c, db, results_directory, quiet
 ):
     """
 
-    :param scenario_id:
-    :param c:
-    :param db:
+    :param scenario_id: 
+    :param c: 
+    :param db: 
     :param results_directory:
     :param quiet:
-    :return:
+    :return: 
     """
-    import_csv(
-        conn=db,
-        cursor=c,
-        scenario_id=scenario_id,
-        subproblem=subproblem,
-        stage=stage,
-        quiet=quiet,
-        results_directory=results_directory,
-        which_results="project_local_capacity",
+    if not quiet:
+        print("project local capacity contributions")
+
+    # Delete prior results and create temporary import table for ordering
+    setup_results_import(
+        conn=db, cursor=c,
+        table="results_project_local_capacity",
+        scenario_id=scenario_id, subproblem=subproblem, stage=stage
     )
+
+    # Load results into the temporary table
+    results = []
+    with open(os.path.join(
+            results_directory,
+            "project_local_capacity_contribution.csv"), "r"
+    ) as local_capacity_results_file:
+        reader = csv.reader(local_capacity_results_file)
+
+        next(reader)  # skip header
+        for row in reader:
+            project = row[0]
+            period = row[1]
+            local_capacity_zone = row[2]
+            technology = row[3]
+            load_zone = row[4]
+            capacity = row[5]
+            local_capacity_fraction = row[6]
+            contribution_mw = row[7]
+            
+            results.append(
+                (scenario_id, project, period, subproblem, stage,
+                 local_capacity_zone, technology, load_zone,
+                 capacity, local_capacity_fraction, contribution_mw)
+            )
+
+    insert_temp_sql = """
+        INSERT INTO temp_results_project_local_capacity{}
+        (scenario_id, project, period, subproblem_id, stage_id,
+        local_capacity_zone, technology, load_zone, 
+        capacity_mw, local_capacity_fraction,
+        local_capacity_contribution_mw)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+        """.format(scenario_id)
+    spin_on_database_lock(conn=db, cursor=c, sql=insert_temp_sql, data=results)
+
+    # Insert sorted results into permanent results table
+    insert_sql = """
+        INSERT INTO results_project_local_capacity
+        (scenario_id, project, period, subproblem_id, stage_id,
+        local_capacity_zone, technology, load_zone, 
+        capacity_mw, local_capacity_fraction, local_capacity_contribution_mw)
+        SELECT
+        scenario_id, project, period, subproblem_id, stage_id,
+        local_capacity_zone, technology, load_zone,
+        capacity_mw, local_capacity_fraction, local_capacity_contribution_mw
+        FROM temp_results_project_local_capacity{}
+        ORDER BY scenario_id, project, subproblem_id, stage_id, period;
+        """.format(scenario_id)
+    spin_on_database_lock(conn=db, cursor=c, sql=insert_sql, data=(),
+                          many=False)

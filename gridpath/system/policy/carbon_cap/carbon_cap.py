@@ -1,4 +1,4 @@
-# Copyright 2016-2023 Blue Marble Analytics LLC.
+# Copyright 2016-2020 Blue Marble Analytics LLC.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -22,9 +22,6 @@ import pandas as pd
 
 from pyomo.environ import Set, Param, NonNegativeReals, value
 
-from gridpath.common_functions import create_results_df
-from gridpath.system.policy.carbon_cap import CARBON_CAP_ZONE_PRD_DF
-
 
 def add_model_components(m, d, scenario_directory, subproblem, stage):
     """
@@ -34,12 +31,11 @@ def add_model_components(m, d, scenario_directory, subproblem, stage):
     :return:
     """
 
-    m.CARBON_CAP_ZONE_PERIODS_WITH_CARBON_CAP = Set(
-        dimen=2, within=m.CARBON_CAP_ZONES * m.PERIODS
-    )
+    m.CARBON_CAP_ZONE_PERIODS_WITH_CARBON_CAP = \
+        Set(dimen=2, within=m.CARBON_CAP_ZONES * m.PERIODS)
     m.carbon_cap_target = Param(
-        m.CARBON_CAP_ZONE_PERIODS_WITH_CARBON_CAP, within=NonNegativeReals
-    )
+        m.CARBON_CAP_ZONE_PERIODS_WITH_CARBON_CAP,
+        within=NonNegativeReals)
 
 
 def load_model_data(m, d, data_portal, scenario_directory, subproblem, stage):
@@ -53,14 +49,13 @@ def load_model_data(m, d, data_portal, scenario_directory, subproblem, stage):
     :param stage:
     :return:
     """
-    data_portal.load(
-        filename=os.path.join(
-            scenario_directory, str(subproblem), str(stage), "inputs", "carbon_cap.tab"
-        ),
-        index=m.CARBON_CAP_ZONE_PERIODS_WITH_CARBON_CAP,
-        param=m.carbon_cap_target,
-        select=("carbon_cap_zone", "period", "carbon_cap_target"),
-    )
+    data_portal.load(filename=os.path.join(scenario_directory, str(subproblem), str(stage),
+                                           "inputs", "carbon_cap.tab"),
+                     index=m.CARBON_CAP_ZONE_PERIODS_WITH_CARBON_CAP,
+                     param=m.carbon_cap_target,
+                     select=("carbon_cap_zone", "period",
+                             "carbon_cap_target")
+                     )
 
 
 def get_inputs_from_database(scenario_id, subscenarios, subproblem, stage, conn):
@@ -95,7 +90,7 @@ def get_inputs_from_database(scenario_id, subscenarios, subproblem, stage, conn)
             subscenarios.CARBON_CAP_ZONE_SCENARIO_ID,
             subscenarios.CARBON_CAP_TARGET_SCENARIO_ID,
             subproblem,
-            stage,
+            stage
         )
     )
 
@@ -117,9 +112,7 @@ def validate_inputs(scenario_id, subscenarios, subproblem, stage, conn):
     #     scenario_id, subscenarios, subproblem, stage, conn)
 
 
-def write_model_inputs(
-    scenario_directory, scenario_id, subscenarios, subproblem, stage, conn
-):
+def write_model_inputs(scenario_directory, scenario_id, subscenarios, subproblem, stage, conn):
     """
     Get inputs from database and write out the model input
     carbon_cap.tab file.
@@ -132,53 +125,17 @@ def write_model_inputs(
     """
 
     carbon_cap_targets = get_inputs_from_database(
-        scenario_id, subscenarios, subproblem, stage, conn
-    )
+        scenario_id, subscenarios, subproblem, stage, conn)
 
-    with open(
-        os.path.join(
-            scenario_directory, str(subproblem), str(stage), "inputs", "carbon_cap.tab"
-        ),
-        "w",
-        newline="",
-    ) as carbon_cap_file:
+    with open(os.path.join(scenario_directory, str(subproblem), str(stage), "inputs",
+                           "carbon_cap.tab"), "w", newline="") as \
+            carbon_cap_file:
         writer = csv.writer(carbon_cap_file, delimiter="\t", lineterminator="\n")
 
         # Write header
-        writer.writerow(["carbon_cap_zone", "period", "carbon_cap_target"])
+        writer.writerow(
+            ["carbon_cap_zone", "period", "carbon_cap_target"]
+        )
 
         for row in carbon_cap_targets:
             writer.writerow(row)
-
-
-def export_results(scenario_directory, subproblem, stage, m, d):
-    """
-
-    :param scenario_directory:
-    :param subproblem:
-    :param stage:
-    :param m:
-    :param d:
-    :return:
-    """
-
-    results_columns = [
-        "carbon_cap_target",
-    ]
-    data = [
-        [
-            z,
-            p,
-            m.carbon_cap_target[z, p],
-        ]
-        for (z, p) in m.CARBON_CAP_ZONE_PERIODS_WITH_CARBON_CAP
-    ]
-    results_df = create_results_df(
-        index_columns=["carbon_cap_zone", "period"],
-        results_columns=results_columns,
-        data=data,
-    )
-
-    for c in results_columns:
-        getattr(d, CARBON_CAP_ZONE_PRD_DF)[c] = None
-    getattr(d, CARBON_CAP_ZONE_PRD_DF).update(results_df)

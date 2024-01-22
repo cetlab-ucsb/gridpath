@@ -309,6 +309,9 @@ def add_model_components(m, d, scenario_directory, subproblem, stage):
     ###########################################################################
 
     # Power and State of Charge
+
+    #constraint on capacity are soft constraints, didn't remove because don't want to create a new type of capacity in the capacity module
+    
     m.Stor_H2_Max_Charge_Constraint = Constraint(
         m.STOR_H2_OPR_TMPS,
         rule=max_Stor_H2_charge_rule
@@ -318,7 +321,8 @@ def add_model_components(m, d, scenario_directory, subproblem, stage):
         m.STOR_H2_OPR_TMPS,
         rule=max_Stor_H2_discharge_rule
     )
-
+    
+    
     m.Stor_H2_Tracking_Constraint = Constraint(
         m.STOR_H2_OPR_TMPS,
         rule=H2_tracking_rule

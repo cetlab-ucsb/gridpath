@@ -1,4 +1,4 @@
-# Copyright 2016-2023 Blue Marble Analytics LLC.
+# Copyright 2016-2020 Blue Marble Analytics LLC.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -46,9 +46,10 @@ def load_model_data(m, d, data_portal, scenario_directory, subproblem, stage):
     """
     data_portal.load(
         filename=os.path.join(
-            scenario_directory, str(subproblem), str(stage), "inputs", "markets.tab"
+            scenario_directory, str(subproblem), str(stage), "inputs",
+            "markets.tab"
         ),
-        set=m.MARKETS,
+        set=m.MARKETS
     )
 
 
@@ -87,9 +88,7 @@ def validate_inputs(scenario_id, subscenarios, subproblem, stage, conn):
     pass
 
 
-def write_model_inputs(
-    scenario_directory, scenario_id, subscenarios, subproblem, stage, conn
-):
+def write_model_inputs(scenario_directory, scenario_id, subscenarios, subproblem, stage, conn):
     """
     Get inputs from database and write out the model input
     local_capacity_zones.tab file.
@@ -102,15 +101,13 @@ def write_model_inputs(
     """
 
     markets = get_inputs_from_database(
-        scenario_id, subscenarios, subproblem, stage, conn
-    )
+        scenario_id, subscenarios, subproblem, stage, conn)
 
     with open(
-        os.path.join(
-            scenario_directory, str(subproblem), str(stage), "inputs", "markets.tab"
-        ),
-        "w",
-        newline="",
+            os.path.join(
+                scenario_directory, str(subproblem), str(stage), "inputs",
+                "markets.tab"
+            ), "w", newline=""
     ) as f:
         writer = csv.writer(f, delimiter="\t", lineterminator="\n")
 

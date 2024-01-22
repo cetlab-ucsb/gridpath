@@ -1,4 +1,4 @@
-# Copyright 2016-2023 Blue Marble Analytics LLC.
+# Copyright 2016-2020 Blue Marble Analytics LLC.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,9 +21,6 @@ import os.path
 
 from pyomo.environ import Set, Param, NonNegativeReals
 
-from gridpath.common_functions import create_results_df
-from gridpath.system.reliability.prm import PRM_ZONE_PRD_DF
-
 
 def add_model_components(m, d, scenario_directory, subproblem, stage):
     """
@@ -33,10 +30,11 @@ def add_model_components(m, d, scenario_directory, subproblem, stage):
     :return:
     """
 
-    m.PRM_ZONE_PERIODS_WITH_REQUIREMENT = Set(dimen=2, within=m.PRM_ZONES * m.PERIODS)
+    m.PRM_ZONE_PERIODS_WITH_REQUIREMENT = \
+        Set(dimen=2, within=m.PRM_ZONES * m.PERIODS)
     m.prm_requirement_mw = Param(
-        m.PRM_ZONE_PERIODS_WITH_REQUIREMENT, within=NonNegativeReals
-    )
+        m.PRM_ZONE_PERIODS_WITH_REQUIREMENT,
+        within=NonNegativeReals)
 
 
 def load_model_data(m, d, data_portal, scenario_directory, subproblem, stage):
@@ -50,18 +48,13 @@ def load_model_data(m, d, data_portal, scenario_directory, subproblem, stage):
     :param stage:
     :return:
     """
-    data_portal.load(
-        filename=os.path.join(
-            scenario_directory,
-            str(subproblem),
-            str(stage),
-            "inputs",
-            "prm_requirement.tab",
-        ),
-        index=m.PRM_ZONE_PERIODS_WITH_REQUIREMENT,
-        param=m.prm_requirement_mw,
-        select=("prm_zone", "period", "prm_requirement_mw"),
-    )
+    data_portal.load(filename=os.path.join(scenario_directory, str(subproblem), str(stage),
+                                           "inputs", "prm_requirement.tab"),
+                     index=m.PRM_ZONE_PERIODS_WITH_REQUIREMENT,
+                     param=m.prm_requirement_mw,
+                     select=("prm_zone", "period",
+                             "prm_requirement_mw")
+                     )
 
 
 def get_inputs_from_database(scenario_id, subscenarios, subproblem, stage, conn):
@@ -92,7 +85,7 @@ def get_inputs_from_database(scenario_id, subscenarios, subproblem, stage, conn)
         """.format(
             subscenarios.TEMPORAL_SCENARIO_ID,
             subscenarios.PRM_ZONE_SCENARIO_ID,
-            subscenarios.PRM_REQUIREMENT_SCENARIO_ID,
+            subscenarios.PRM_REQUIREMENT_SCENARIO_ID
         )
     )
 
@@ -114,9 +107,7 @@ def validate_inputs(scenario_id, subscenarios, subproblem, stage, conn):
     #     scenario_id, subscenarios, subproblem, stage, conn)
 
 
-def write_model_inputs(
-    scenario_directory, scenario_id, subscenarios, subproblem, stage, conn
-):
+def write_model_inputs(scenario_directory, scenario_id, subscenarios, subproblem, stage, conn):
     """
     Get inputs from database and write out the model input
     prm_requirement.tab file.
@@ -129,59 +120,18 @@ def write_model_inputs(
     """
 
     prm_requirement = get_inputs_from_database(
-        scenario_id, subscenarios, subproblem, stage, conn
-    )
+        scenario_id, subscenarios, subproblem, stage, conn)
 
-    with open(
-        os.path.join(
-            scenario_directory,
-            str(subproblem),
-            str(stage),
-            "inputs",
-            "prm_requirement.tab",
-        ),
-        "w",
-        newline="",
-    ) as prm_requirement_tab_file:
-        writer = csv.writer(
-            prm_requirement_tab_file, delimiter="\t", lineterminator="\n"
-        )
+    with open(os.path.join(scenario_directory, str(subproblem), str(stage), "inputs",
+                           "prm_requirement.tab"), "w", newline="") as \
+            prm_requirement_tab_file:
+        writer = csv.writer(prm_requirement_tab_file,
+                            delimiter="\t", lineterminator="\n")
 
         # Write header
-        writer.writerow(["prm_zone", "period", "prm_requirement_mw"])
+        writer.writerow(
+            ["prm_zone", "period", "prm_requirement_mw"]
+        )
 
         for row in prm_requirement:
             writer.writerow(row)
-
-
-def export_results(scenario_directory, subproblem, stage, m, d):
-    """
-
-    :param scenario_directory:
-    :param subproblem:
-    :param stage:
-    :param m:
-    :param d:
-    :return:
-    """
-
-    results_columns = [
-        "prm_requirement_mw",
-    ]
-    data = [
-        [
-            z,
-            p,
-            float(m.prm_requirement_mw[z, p]),
-        ]
-        for (z, p) in m.PRM_ZONE_PERIODS_WITH_REQUIREMENT
-    ]
-    results_df = create_results_df(
-        index_columns=["prm_zone", "period"],
-        results_columns=results_columns,
-        data=data,
-    )
-
-    for c in results_columns:
-        getattr(d, PRM_ZONE_PRD_DF)[c] = None
-    getattr(d, PRM_ZONE_PRD_DF).update(results_df)

@@ -1,4 +1,4 @@
-# Copyright 2016-2023 Blue Marble Analytics LLC.
+# Copyright 2016-2020 Blue Marble Analytics LLC.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -24,7 +24,7 @@ import pandas as pd
 # TODO: use this in capacity and operational type project subset
 #  determinations
 def determine_project_subset(
-    scenario_directory, subproblem, stage, column, type, prj_or_tx
+        scenario_directory, subproblem, stage, column, type
 ):
     """
     :param scenario_directory:
@@ -38,44 +38,50 @@ def determine_project_subset(
 
     project_subset = list()
 
-    dynamic_components = pd.read_csv(
-        os.path.join(
-            scenario_directory,
-            str(subproblem),
-            str(stage),
-            "inputs",
-            "{}s.tab".format(prj_or_tx),
-        ),
-        sep="\t",
-        usecols=[prj_or_tx, column],
-    )
+    dynamic_components = \
+        pd.read_csv(
+            os.path.join(scenario_directory, str(subproblem), str(stage),
+                         "inputs", "projects.tab"),
+            sep="\t", usecols=["project", column]
+        )
 
-    for row in zip(dynamic_components[prj_or_tx], dynamic_components[column]):
+    for row in zip(dynamic_components["project"],
+                   dynamic_components[column]):
         if row[1] == type:
             project_subset.append(row[0])
+        else:
+            pass
 
     return project_subset
 
 
-def check_if_first_timepoint(mod, tmp, balancing_type):
-    return tmp == mod.first_hrz_tmp[balancing_type, mod.horizon[tmp, balancing_type]]
+def check_if_first_timepoint(
+        mod, tmp, balancing_type
+):
+    return tmp == mod.first_hrz_tmp[
+        balancing_type, mod.horizon[tmp, balancing_type]]
 
 
-def check_if_last_timepoint(mod, tmp, balancing_type):
-    return tmp == mod.last_hrz_tmp[balancing_type, mod.horizon[tmp, balancing_type]]
+def check_if_last_timepoint(
+        mod, tmp, balancing_type
+):
+    return tmp == mod.last_hrz_tmp[
+        balancing_type, mod.horizon[tmp, balancing_type]]
 
 
 def check_boundary_type(mod, tmp, balancing_type, boundary_type):
-    return (
-        mod.boundary[balancing_type, mod.horizon[tmp, balancing_type]] == boundary_type
-    )
+    return mod.boundary[balancing_type, mod.horizon[tmp, balancing_type]] \
+           == boundary_type
 
 
-def check_if_boundary_type_and_first_timepoint(mod, tmp, balancing_type, boundary_type):
+def check_if_boundary_type_and_first_timepoint(
+    mod, tmp, balancing_type, boundary_type
+):
     if check_if_first_timepoint(
-        mod=mod, tmp=tmp, balancing_type=balancing_type
+            mod=mod, tmp=tmp, balancing_type=balancing_type
     ) and check_boundary_type(
-        mod=mod, tmp=tmp, balancing_type=balancing_type, boundary_type=boundary_type
+        mod=mod, tmp=tmp, balancing_type=balancing_type,
+        boundary_type=boundary_type
     ):
         return True
     else:
@@ -104,7 +110,8 @@ def get_column_row_value(header, column_name, row):
 
 
 def append_to_input_file(
-    inputs_directory, input_file, query_results, index_n_columns, new_column_names
+        inputs_directory, input_file, query_results, index_n_columns,
+        new_column_names
 ):
     """
 
@@ -161,6 +168,7 @@ def append_to_input_file(
 
     # Now that we have updated all our rows, overwrite the previous
     # projects.tab file
-    with open(os.path.join(inputs_directory, input_file), "w", newline="") as f_out:
+    with open(os.path.join(inputs_directory, input_file), "w",
+              newline="") as f_out:
         writer = csv.writer(f_out, delimiter="\t", lineterminator="\n")
         writer.writerows(new_rows)

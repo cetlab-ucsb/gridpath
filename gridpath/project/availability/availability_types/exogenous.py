@@ -1,4 +1,4 @@
-# Copyright 2016-2023 Blue Marble Analytics LLC.
+# Copyright 2016-2020 Blue Marble Analytics LLC.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,9 +14,9 @@
 
 """
 For each project assigned this *availability type*, the user may specify an
-(un)availability schedule, i.e. a capacity derate for each timepoint in
-which the project may be operated. If fully derated in a given timepoint,
-the available project capacity will be 0 in that timepoint and all
+(un)availability schedule, i.e. a capacity derate of 0 to 1 for each
+timepoint in which the project may be operated. If fully derated in a given
+timepoint, the available project capacity will be 0 in that timepoint and all
 operational decision variables will therefore also be constrained to 0 in the
 optimization.
 
@@ -24,19 +24,13 @@ optimization.
 
 import csv
 import os.path
-from pyomo.environ import Param, Set, NonNegativeReals
+from pyomo.environ import Param, Set, PercentFraction
 
-from gridpath.auxiliary.auxiliary import cursor_to_df, subset_init_by_set_membership
-from gridpath.auxiliary.validations import (
-    write_validation_to_database,
-    get_expected_dtypes,
-    validate_dtypes,
-    validate_values,
-    validate_missing_inputs,
-)
-from gridpath.project.common_functions import (
-    determine_project_subset,
-)
+from gridpath.auxiliary.auxiliary import cursor_to_df
+from gridpath.auxiliary.validations import write_validation_to_database, \
+    get_expected_dtypes, validate_dtypes, validate_values, \
+    validate_missing_inputs
+from gridpath.project.common_functions import determine_project_subset
 
 
 def add_model_components(m, d, scenario_directory, subproblem, stage):
@@ -61,14 +55,13 @@ def add_model_components(m, d, scenario_directory, subproblem, stage):
     +-------------------------------------------------------------------------+
     | Optional Input Params                                                   |
     +=========================================================================+
-    | | :code:`avl_exog_cap_derate`                                           |
+    | | :code:`avl_exog_derate`                                               |
     | | *Defined over*: :code:`AVL_EXOG_OPR_TMPS`                             |
-    | | *Within*: :code:`NonNegativeReals`                                    |
+    | | *Within*: :code:`PercentFraction`                                     |
     | | *Default*: :code:`1`                                                  |
     |                                                                         |
     | The pre-specified availability derate (e.g. for maintenance/planned     |
-    | outages). Defaults to 1 if not specified. Availaibility can also be     |
-    | more than 1.                                                            |
+    | outages). Defaults to 1 if not specified.                               |
     +-------------------------------------------------------------------------+
 
     """
@@ -78,49 +71,41 @@ def add_model_components(m, d, scenario_directory, subproblem, stage):
 
     m.AVL_EXOG = Set(within=m.PROJECTS)
 
+    # TODO: factor out this lambda rule, as it is used in all operational type
+    #  modules and availability type modules
     m.AVL_EXOG_OPR_TMPS = Set(
-        dimen=2,
-        within=m.PRJ_OPR_TMPS,
-        initialize=lambda mod: subset_init_by_set_membership(
-            mod=mod, superset="PRJ_OPR_TMPS", index=0, membership_set=mod.AVL_EXOG
-        ),
+        dimen=2, within=m.PRJ_OPR_TMPS,
+        initialize=lambda mod: list(
+            set((g, tmp) for (g, tmp) in mod.PRJ_OPR_TMPS
+                if g in mod.AVL_EXOG)
+        )
     )
 
     # Required Params
     ###########################################################################
 
-    m.avl_exog_cap_derate = Param(
-        m.AVL_EXOG_OPR_TMPS, within=NonNegativeReals, default=1
-    )
-
-    m.avl_exog_hyb_gen_cap_derate = Param(
-        m.AVL_EXOG_OPR_TMPS, within=NonNegativeReals, default=1
-    )
-
-    m.avl_exog_hyb_stor_cap_derate = Param(
-        m.AVL_EXOG_OPR_TMPS, within=NonNegativeReals, default=1
+    m.avl_exog_derate = Param(
+        m.AVL_EXOG_OPR_TMPS,
+        within=PercentFraction,
+        default=1
     )
 
 
 # Availability Type Methods
 ###############################################################################
 
-
-def availability_derate_cap_rule(mod, g, tmp):
-    """ """
-    return mod.avl_exog_cap_derate[g, tmp]
-
-
-def availability_derate_hyb_stor_cap_rule(mod, g, tmp):
-    """ """
-    return mod.avl_exog_hyb_stor_cap_derate[g, tmp]
+def availability_derate_rule(mod, g, tmp):
+    """
+    """
+    return mod.avl_exog_derate[g, tmp]
 
 
 # Input-Output
 ###############################################################################
 
-
-def load_model_data(m, d, data_portal, scenario_directory, subproblem, stage):
+def load_model_data(
+    m, d, data_portal, scenario_directory, subproblem, stage
+):
     """
     :param m:
     :param data_portal:
@@ -132,11 +117,8 @@ def load_model_data(m, d, data_portal, scenario_directory, subproblem, stage):
     # Figure out which projects have this availability type
     project_subset = determine_project_subset(
         scenario_directory=scenario_directory,
-        subproblem=subproblem,
-        stage=stage,
-        column="availability_type",
-        type="exogenous",
-        prj_or_tx="project",
+        subproblem=subproblem, stage=stage, column="availability_type",
+        type="exogenous"
     )
 
     data_portal.data()["AVL_EXOG"] = {None: project_subset}
@@ -149,25 +131,25 @@ def load_model_data(m, d, data_portal, scenario_directory, subproblem, stage):
     # The test examples do not currently have a
     # project_availability_exogenous.tab, but use the default instead
     availability_file = os.path.join(
-        scenario_directory,
-        subproblem,
-        stage,
-        "inputs",
-        "project_availability_exogenous.tab",
+        scenario_directory, subproblem, stage, "inputs",
+        "project_availability_exogenous.tab"
     )
 
     if os.path.exists(availability_file):
         data_portal.load(
             filename=availability_file,
-            param=(m.avl_exog_cap_derate, m.avl_exog_hyb_stor_cap_derate),
+            param=m.avl_exog_derate
         )
+    else:
+        pass
 
 
 # Database
 ###############################################################################
 
-
-def get_inputs_from_database(scenario_id, subscenarios, subproblem, stage, conn):
+def get_inputs_from_database(
+        scenario_id, subscenarios, subproblem, stage, conn
+):
     """
     :param subscenarios:
     :param subproblem:
@@ -179,8 +161,7 @@ def get_inputs_from_database(scenario_id, subscenarios, subproblem, stage, conn)
     stage = 1 if stage == "" else stage
 
     sql = """
-        SELECT project, timepoint, availability_derate, 
-        hyb_stor_cap_availability_derate
+        SELECT project, timepoint, availability_derate
         -- Select only projects, periods, timepoints from the relevant 
         -- portfolio, relevant opchar scenario id, operational type, 
         -- and temporal scenario id
@@ -236,7 +217,7 @@ def get_inputs_from_database(scenario_id, subscenarios, subproblem, stage, conn)
 
 
 def write_model_inputs(
-    scenario_directory, scenario_id, subscenarios, subproblem, stage, conn
+        scenario_directory, scenario_id, subscenarios, subproblem, stage, conn
 ):
     """
     :param scenario_directory:
@@ -251,29 +232,12 @@ def write_model_inputs(
     ).fetchall()
 
     if availabilities:
-        with open(
-            os.path.join(
-                scenario_directory,
-                str(subproblem),
-                str(stage),
-                "inputs",
-                "project_availability_exogenous.tab",
-            ),
-            "w",
-            newline="",
-        ) as availability_tab_file:
-            writer = csv.writer(
-                availability_tab_file, delimiter="\t", lineterminator="\n"
-            )
+        with open(os.path.join(scenario_directory, str(subproblem), str(stage), "inputs",
+                               "project_availability_exogenous.tab"),
+                  "w", newline="") as availability_tab_file:
+            writer = csv.writer(availability_tab_file, delimiter="\t", lineterminator="\n")
 
-            writer.writerow(
-                [
-                    "project",
-                    "timepoint",
-                    "availability_derate",
-                    "hyb_stor_cap_availability_derate",
-                ]
-            )
+            writer.writerow(["project", "timepoint", "availability_derate"])
 
             for row in availabilities:
                 row = ["." if i is None else i for i in row]
@@ -282,7 +246,6 @@ def write_model_inputs(
 
 # Validation
 ###############################################################################
-
 
 def validate_inputs(scenario_id, subscenarios, subproblem, stage, conn):
     """
@@ -302,8 +265,8 @@ def validate_inputs(scenario_id, subscenarios, subproblem, stage, conn):
 
     # Check data types availability
     expected_dtypes = get_expected_dtypes(
-        conn, ["inputs_project_availability", "inputs_project_availability_exogenous"]
-    )
+        conn, ["inputs_project_availability",
+               "inputs_project_availability_exogenous"])
     dtype_errors, error_columns = validate_dtypes(df, expected_dtypes)
     write_validation_to_database(
         conn=conn,
@@ -313,16 +276,14 @@ def validate_inputs(scenario_id, subscenarios, subproblem, stage, conn):
         gridpath_module=__name__,
         db_table="inputs_project_availability_exogenous",
         severity="High",
-        errors=dtype_errors,
+        errors=dtype_errors
     )
 
     # Check for missing inputs
-    msg = (
-        "If not specified, availability is assumed to be 100%. If you "
-        "don't want to specify any availability derates, simply leave the "
-        "exogenous_availability_scenario_id empty and this message will "
-        "disappear."
-    )
+    msg = "If not specified, availability is assumed to be 100%. If you " \
+          "don't want to specify any availability derates, simply leave the " \
+          "exogenous_availability_scenario_id empty and this message will " \
+          "disappear."
     write_validation_to_database(
         conn=conn,
         scenario_id=scenario_id,
@@ -331,7 +292,7 @@ def validate_inputs(scenario_id, subscenarios, subproblem, stage, conn):
         gridpath_module=__name__,
         db_table="inputs_project_availability_exogenous",
         severity="Low",
-        errors=validate_missing_inputs(df, value_cols, idx_cols, msg),
+        errors=validate_missing_inputs(df, value_cols, idx_cols, msg)
     )
 
     # Check for correct sign
@@ -344,5 +305,5 @@ def validate_inputs(scenario_id, subscenarios, subproblem, stage, conn):
             gridpath_module=__name__,
             db_table="inputs_project_availability_exogenous",
             severity="High",
-            errors=validate_values(df, value_cols, min=0, max=1),
+            errors=validate_values(df, value_cols, min=0, max=1)
         )

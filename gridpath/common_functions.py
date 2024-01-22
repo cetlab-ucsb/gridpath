@@ -1,4 +1,4 @@
-# Copyright 2016-2023 Blue Marble Analytics LLC.
+# Copyright 2016-2020 Blue Marble Analytics LLC.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,8 +17,6 @@ import sys
 
 from argparse import ArgumentParser
 
-import pandas as pd
-
 
 def determine_scenario_directory(scenario_location, scenario_name):
     """
@@ -32,11 +30,14 @@ def determine_scenario_directory(scenario_location, scenario_name):
     working directory).
     """
     if scenario_location is None:
-        main_directory = os.path.join(os.getcwd(), "..", "scenarios")
+        main_directory = os.path.join(
+            os.getcwd(), "..", "scenarios")
     else:
         main_directory = scenario_location
 
-    scenario_directory = os.path.join(main_directory, str(scenario_name))
+    scenario_directory = os.path.join(
+        main_directory, str(scenario_name)
+    )
 
     return scenario_directory
 
@@ -67,23 +68,12 @@ def get_required_e2e_arguments_parser():
     """
 
     parser = ArgumentParser(add_help=False)
-    parser.add_argument(
-        "--scenario_location",
-        default="../scenarios",
-        help="The path to the directory in which to create "
-        "the scenario directory. Defaults to "
-        "'../scenarios' if not specified.",
-    )
-    parser.add_argument(
-        "--quiet", default=False, action="store_true", help="Don't print run output."
-    )
-
-    parser.add_argument(
-        "--verbose",
-        default=False,
-        action="store_true",
-        help="Print extra output, e.g. current module info.",
-    )
+    parser.add_argument("--scenario_location", default="../scenarios",
+                        help="The path to the directory in which to create "
+                             "the scenario directory. Defaults to "
+                             "'../scenarios' if not specified.")
+    parser.add_argument("--quiet", default=False, action="store_true",
+                        help="Don't print run output.")
 
     return parser
 
@@ -102,13 +92,9 @@ def get_scenario_name_parser():
     """
 
     parser = ArgumentParser(add_help=False)
-    required = parser.add_argument_group("required arguments")
-    required.add_argument(
-        "--scenario",
-        required=True,
-        type=str,
-        help="Name of the scenario problem to solve.",
-    )
+    required = parser.add_argument_group('required arguments')
+    required.add_argument("--scenario", required=True, type=str,
+                          help="Name of the scenario problem to solve.")
 
     return parser
 
@@ -127,42 +113,42 @@ def get_db_parser():
     """
 
     parser = ArgumentParser(add_help=False)
-    parser.add_argument(
-        "--database",
-        default="../db/io.db",
-        help="The database file path relative to the current "
-        "working directory. Defaults to ../db/io.db ",
-    )
-    parser.add_argument(
-        "--scenario_id",
-        type=int,
-        help="The scenario_id from the database. Not needed "
-        "if scenario is specified.",
-    )
-    parser.add_argument(
-        "--scenario",
-        type=str,
-        help="The scenario_name from the database. Not "
-        "needed if scenario_id is specified.",
-    )
+    parser.add_argument("--database", default="../db/io.db",
+                        help="The database file path relative to the current "
+                             "working directory. Defaults to ../db/io.db ")
+    parser.add_argument("--scenario_id", type=int,
+                        help="The scenario_id from the database. Not needed "
+                             "if scenario is specified.")
+    parser.add_argument("--scenario", type=str,
+                        help="The scenario_name from the database. Not "
+                             "needed if scenario_id is specified.")
 
     return parser
 
 
-def get_get_inputs_parser():
-    """ """
+def get_parallel_get_inputs_parser():
+    """
+    """
 
     parser = ArgumentParser(add_help=False)
-    parser.add_argument(
-        "--n_parallel_get_inputs",
-        default=1,
-        help="Get inputs for n subproblems in parallel.",
-    )
+    parser.add_argument("--n_parallel_get_inputs", default=1,
+                        help="Get inputs for n subproblems in parallel.")
 
     return parser
 
 
-def get_run_scenario_parser():
+def get_parallel_solve_parser():
+    """
+    """
+
+    parser = ArgumentParser(add_help=False)
+    parser.add_argument("--n_parallel_solve", default=1,
+                        help="Solve n subproblems in parallel.")
+
+    return parser
+
+
+def get_solve_parser():
     """
     Create ArgumentParser object which has the common set of arguments for
     solving a scenario (see run_scenario.py and run_end_to_end.py).
@@ -178,114 +164,36 @@ def get_run_scenario_parser():
     parser = ArgumentParser(add_help=False)
 
     # Output options
-    parser.add_argument(
-        "--log",
-        default=False,
-        action="store_true",
-        help="Log output to a file in the scenario's 'logs' "
-        "directory as well as the terminal.",
-    )
-    # Problem files and solutions
-    parser.add_argument(
-        "--create_lp_problem_file_only",
-        default=False,
-        action="store_true",
-        help="Create and save the problem file, but don't solve yet.",
-    )
-    parser.add_argument(
-        "--load_cplex_solution",
-        default=False,
-        action="store_true",
-        help="Skip solve and load results from a CPLEX solution file instead.",
-    )
-    parser.add_argument(
-        "--load_gurobi_solution",
-        default=False,
-        action="store_true",
-        help="Skip solve and load results from a Gurobi solution file instead.",
-    )
+    parser.add_argument("--log", default=False, action="store_true",
+                        help="Log output to a file in the scenario's 'logs' "
+                             "directory as well as the terminal.")
     # Solver options
-    parser.add_argument(
-        "--solver",
-        help="Name of the solver to use. "
-        "GridPath will use Cbc if solver is "
-        "not specified here and a "
-        "'solver_options.csv' file does not "
-        "exist in the scenario directory.",
-    )
-    parser.add_argument(
-        "--solver_executable",
-        help="The path to the solver executable to use. This "
-        "is optional; if you don't specify it, "
-        "Pyomo will look for the solver executable in "
-        "your PATH. The solver specified with the "
-        "--solver option must be the same as the solver "
-        "for which you are providing an executable.",
-    )
-    parser.add_argument(
-        "--mute_solver_output",
-        default=False,
-        action="store_true",
-        help="Don't print solver output.",
-    )
-    parser.add_argument(
-        "--write_solver_files_to_logs_dir",
-        default=False,
-        action="store_true",
-        help="Write the temporary " "solver files to the logs " "directory.",
-    )
-    parser.add_argument(
-        "--keepfiles",
-        default=False,
-        action="store_true",
-        help="Save temporary solver files.",
-    )
-    parser.add_argument(
-        "--symbolic",
-        default=False,
-        action="store_true",
-        help="Use symbolic labels in solver files.",
-    )
+    parser.add_argument("--solver", help="Name of the solver to use. "
+                                         "GridPath will use Cbc if solver is "
+                                         "not specified here and a "
+                                         "'solver_options.csv' file does not "
+                                         "exist in the scenario directory.")
+    parser.add_argument("--solver_executable",
+                        help="The path to the solver executable to use. This "
+                             "is optional; if you don't specify it, "
+                             "Pyomo will look for the solver executable in "
+                             "your PATH. The solver specified with the "
+                             "--solver option must be the same as the solver "
+                             "for which you are providing an executable.")
+    parser.add_argument("--mute_solver_output", default=False,
+                        action="store_true",
+                        help="Don't print solver output.")
+    parser.add_argument("--write_solver_files_to_logs_dir", default=False,
+                        action="store_true", help="Write the temporary "
+                                                  "solver files to the logs "
+                                                  "directory.")
+    parser.add_argument("--keepfiles", default=False, action="store_true",
+                        help="Save temporary solver files.")
+    parser.add_argument("--symbolic", default=False, action="store_true",
+                        help="Use symbolic labels in solver files.")
     # Flag for test runs (various changes in behavior)
-    parser.add_argument(
-        "--testing",
-        default=False,
-        action="store_true",
-        help="Flag for test suite runs.",
-    )
-
-    # Parallel solve
-    parser.add_argument(
-        "--n_parallel_solve",
-        default=1,
-        help="Solve n subproblems in parallel.",
-    )
-
-    # Solve only incomplete subproblems
-    parser.add_argument(
-        "--incomplete_only",
-        default=False,
-        action="store_true",
-        help="Solve only incomplete subproblems, i.e. do no re-solve if "
-        "results are found. The subproblem is assumed complete if the"
-        "termination_condition.txt file is found.",
-    )
-
-    # Results export rule name
-    parser.add_argument(
-        "--results_export_rule",
-        help="The name of the rule to use to decide whether to export results.",
-    )
-
-    return parser
-
-
-def get_import_results_parser():
-    parser = ArgumentParser(add_help=False)
-    parser.add_argument(
-        "--results_import_rule",
-        help="The name of the rule to use to decide whether to import results.",
-    )
+    parser.add_argument("--testing", default=False, action="store_true",
+                        help="Flag for test suite runs. Results not saved.")
 
     return parser
 
@@ -298,9 +206,7 @@ def create_logs_directory_if_not_exists(scenario_directory, subproblem, stage):
     :param stage:
     :return:
     """
-    logs_directory = os.path.join(
-        scenario_directory, str(subproblem), str(stage), "logs"
-    )
+    logs_directory = os.path.join(scenario_directory, str(subproblem), str(stage), "logs")
     if not os.path.exists(logs_directory):
         os.makedirs(logs_directory)
     return logs_directory
@@ -325,16 +231,22 @@ class Logging(object):
         # If logging run_e2e, print to a file starting with e2e_, with the
         # datetime, and the process ID
         if not e2e:
-            self.log_file_path = os.path.join(
-                logs_dir, "opt_{}.log".format(string_from_time(start_time))
-            )
+            self.log_file_path = \
+                os.path.join(
+                    logs_dir,
+                    "opt_{}.log".format(
+                        string_from_time(start_time)
+                    )
+                )
         else:
-            self.log_file_path = os.path.join(
-                logs_dir,
-                "e2e_{}_pid_{}.log".format(
-                    string_from_time(start_time), str(process_id)
-                ),
-            )
+            self.log_file_path = \
+                os.path.join(
+                    logs_dir,
+                    "e2e_{}_pid_{}.log".format(
+                        string_from_time(start_time),
+                        str(process_id)
+                    )
+                )
 
         self.log_file = open(self.log_file_path, "a", buffering=1)
 
@@ -359,20 +271,6 @@ class Logging(object):
         self.terminal.write(message)
         self.log_file.write(message)
 
-        # Find a print statement
-        # import collections
-        # import inspect
-
-        # if message.strip():
-        #     Record = collections.namedtuple(
-        #         'Record',
-        #         'frame filename line_number function_name lines index')
-        #
-        #     record = Record(*inspect.getouterframes(inspect.currentframe())[1])
-        #     self.terminal.write(
-        #         '{f} {n}: '.format(f=record.filename, n=record.line_number))
-        # self.terminal.write(message)
-
     def flush(self):
         """
         Flush both the terminal and the log file
@@ -388,13 +286,4 @@ def string_from_time(datetime_string):
     :param datetime_string: datetime string
     :return: formatted time string
     """
-    return datetime_string.strftime("%Y-%m-%d_%H-%M-%S")
-
-
-def create_results_df(index_columns, results_columns, data):
-    df = pd.DataFrame(
-        columns=index_columns + results_columns,
-        data=data,
-    ).set_index(index_columns)
-
-    return df
+    return datetime_string.strftime('%Y-%m-%d_%H-%M-%S')

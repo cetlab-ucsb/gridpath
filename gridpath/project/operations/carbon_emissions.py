@@ -1,4 +1,4 @@
-# Copyright 2016-2023 Blue Marble Analytics LLC.
+# Copyright 2016-2020 Blue Marble Analytics LLC.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,15 +16,21 @@
 Carbon emissions from each carbonaceous project.
 """
 
+from __future__ import print_function
 
+from builtins import next
+from builtins import str
 import csv
 import os.path
-from pyomo.environ import Expression, value
+from pyomo.environ import Expression, value, Constraint
 
 from db.common_functions import spin_on_database_lock
-from gridpath.common_functions import create_results_df
-from gridpath.project import PROJECT_TIMEPOINT_DF
+from gridpath.auxiliary.db_interface import setup_results_import
 
+from gridpath.auxiliary.auxiliary import get_required_subtype_modules_from_projects_file
+from gridpath.project.operations.common_functions import \
+    load_operational_type_modules
+import gridpath.project.operations.operational_types as op_type_init
 
 def add_model_components(m, d, scenario_directory, subproblem, stage):
     """
@@ -34,7 +40,7 @@ def add_model_components(m, d, scenario_directory, subproblem, stage):
     | Expressions                                                             |
     +=========================================================================+
     | | :code:`Project_Carbon_Emissions`                                      |
-    | | *Defined over*: :code:`FUEL_PRJ_OPR_TMPS`                             |
+    | | *Defined over*: :code:`FUEL_PRJ_OPR_TMPS`                                  |
     |                                                                         |
     | The project's carbon emissions for each timepoint in which the project  |
     | could be operational. Note that this is an emissions *RATE* (per hour)  |
@@ -46,39 +52,95 @@ def add_model_components(m, d, scenario_directory, subproblem, stage):
     # Expressions
     ###########################################################################
 
+
+
+    required_operational_modules = get_required_subtype_modules_from_projects_file(
+        scenario_directory=scenario_directory, subproblem=subproblem,
+        stage=stage, which_type="operational_type"
+    )
+
+    imported_operational_modules = load_operational_type_modules(
+        required_operational_modules
+    )
+
+    # Expressions
+    ###########################################################################
+
+    def ccs_removal_rule(mod, prj, tmp):
+        """
+        **Expression Name**: Power_Provision_MW
+        **Defined Over**: PRJ_OPR_TMPS
+
+        Power provision is a variable for some generators, but not others; get
+        the appropriate expression for each generator based on its operational
+        type.
+        """
+        gen_op_type = mod.operational_type[prj]
+        if hasattr(imported_operational_modules[gen_op_type],
+                   "ccs_removal_rule"):
+            return imported_operational_modules[gen_op_type].\
+                ccs_removal_rule(mod, prj, tmp)
+        else:
+            return op_type_init.ccs_removal_rule(mod, prj, tmp)
+     
+    m.Carbon_Remove = Expression(
+        m.FUEL_PRJ_OPR_TMPS,
+        rule=ccs_removal_rule
+    )
+
+    def ccs_efficiency_rule(mod, prj):
+        """
+        **Expression Name**: Power_Provision_MW
+        **Defined Over**: PRJ_OPR_TMPS
+
+        Power provision is a variable for some generators, but not others; get
+        the appropriate expression for each generator based on its operational
+        type.
+        """
+        gen_op_type = mod.operational_type[prj]
+        if hasattr(imported_operational_modules[gen_op_type],
+                   "ccs_efficiency_rule"):
+            return imported_operational_modules[gen_op_type].\
+                ccs_efficiency_rule(mod, prj)
+        else:
+            return op_type_init.ccs_efficiency_rule(mod, prj)
+     
+    m.Carbon_Remove_Efficiency = Expression(
+        m.FUEL_PRJS,
+        rule=ccs_efficiency_rule
+    )
+    
     def carbon_emissions_rule(mod, prj, tmp):
         """
         Emissions from each project based on operational type
         (and whether a project burns fuel). Multiply by the timepoint duration
-        and timepoint weight to get the total emissions amount. Sum over all fuels
-        times their carbon intensity to get total project carbon emissions
+        and timepoint weight to get the total emissions amount.
         """
 
-        return (
-            sum(
-                (
-                    mod.Total_Fuel_Burn_by_Fuel_MMBtu[prj, f, tmp]
-                    - mod.Project_Fuel_Contribution_by_Fuel[prj, f, tmp]
-                )
-                * mod.co2_intensity_tons_per_mmbtu[f]
-                for f in mod.FUELS_BY_PRJ[prj]
-            )
-            if prj in mod.FUEL_PRJS
-            else 0
-            + (
-                mod.Power_Provision_MW[prj, tmp]
-                * mod.nonfuel_carbon_emissions_per_mwh[prj]
-            )
-            if prj in mod.NONFUEL_CARBON_EMISSIONS_PRJS
-            else 0
-        )
+        return mod.Total_Fuel_Burn_MMBtu[prj, tmp] * \
+            mod.co2_intensity_tons_per_mmbtu[mod.fuel[prj]]\
+            - mod.Carbon_Remove[prj,tmp]
 
-    m.Project_Carbon_Emissions = Expression(m.PRJ_OPR_TMPS, rule=carbon_emissions_rule)
-
-
+    m.Project_Carbon_Emissions = Expression(
+        m.FUEL_PRJ_OPR_TMPS,
+        rule=carbon_emissions_rule
+    )
+    
+    def carbon_emissions_constraint_rule(mod,prj,tmp):
+        return mod.Carbon_Remove_Efficiency[prj] * \
+            mod.Total_Fuel_Burn_MMBtu[prj, tmp] * \
+            mod.co2_intensity_tons_per_mmbtu[mod.fuel[prj]]\
+            >= mod.Carbon_Remove[prj,tmp]
+            
+            
+    
+    m.Project_Carbon_Emissions_Constraint = Constraint(
+        m.FUEL_PRJ_OPR_TMPS,
+        rule=carbon_emissions_constraint_rule
+    )
+    
 # Input-Output
 ###############################################################################
-
 
 def export_results(scenario_directory, subproblem, stage, m, d):
     """
@@ -90,31 +152,107 @@ def export_results(scenario_directory, subproblem, stage, m, d):
     :param d:
     :return:
     """
-
-    results_columns = [
-        "carbon_emissions_tons",
-    ]
-    data = [
-        [
-            prj,
-            tmp,
-            value(m.Project_Carbon_Emissions[prj, tmp]),
-        ]
-        for (prj, tmp) in m.PRJ_OPR_TMPS
-    ]
-    emissions_df = create_results_df(
-        index_columns=["project", "timepoint"],
-        results_columns=results_columns,
-        data=data,
-    )
-
-    for c in results_columns:
-        getattr(d, PROJECT_TIMEPOINT_DF)[c] = None
-    getattr(d, PROJECT_TIMEPOINT_DF).update(emissions_df)
+    with open(os.path.join(scenario_directory, str(subproblem), str(stage),
+                           "results", "carbon_emissions_by_project.csv"),
+              "w", newline="") as carbon_emissions_results_file:
+        writer = csv.writer(carbon_emissions_results_file)
+        writer.writerow(["project", "period", "horizon", "timepoint",
+                         "timepoint_weight",
+                         "number_of_hours_in_timepoint", "load_zone",
+                         "technology", "carbon_emissions_tons","carbon_capture"])
+        for (p, tmp) in m.FUEL_PRJ_OPR_TMPS:
+            writer.writerow([
+                p,
+                m.period[tmp],
+                m.horizon[tmp, m.balancing_type_project[p]],
+                tmp,
+                m.tmp_weight[tmp],
+                m.hrs_in_tmp[tmp],
+                m.load_zone[p],
+                m.technology[p],
+                value(m.Project_Carbon_Emissions[p, tmp]),
+                value(m.Carbon_Remove[p,tmp])
+            ])
 
 
 # Database
 ###############################################################################
+
+def import_results_into_database(
+        scenario_id, subproblem, stage, c, db, results_directory, quiet
+):
+    """
+
+    :param scenario_id:
+    :param c:
+    :param db:
+    :param results_directory:
+    :param quiet:
+    :return:
+    """
+    # Carbon emission imports by project and timepoint
+    if not quiet:
+        print("project carbon emissions")
+
+    # Delete prior results and create temporary import table for ordering
+    setup_results_import(
+        conn=db, cursor=c,
+        table="results_project_carbon_emissions",
+        scenario_id=scenario_id, subproblem=subproblem, stage=stage
+    )
+
+    # Load results into the temporary table
+    results = []
+    with open(os.path.join(results_directory,
+                           "carbon_emissions_by_project.csv"),
+              "r") as emissions_file:
+        reader = csv.reader(emissions_file)
+
+        next(reader)  # skip header
+        for row in reader:
+            project = row[0]
+            period = row[1]
+            horizon = row[2]
+            timepoint = row[3]
+            timepoint_weight = row[4]
+            number_of_hours_in_timepoint = row[5]
+            load_zone = row[6]
+            technology = row[7]
+            carbon_emissions_tons = row[8]
+
+            results.append(
+                (scenario_id, project, period, subproblem, stage,
+                 horizon, timepoint, timepoint_weight,
+                 number_of_hours_in_timepoint,
+                 load_zone, technology, carbon_emissions_tons)
+            )
+
+    insert_temp_sql = """
+        INSERT INTO 
+        temp_results_project_carbon_emissions{}
+         (scenario_id, project, period, subproblem_id, stage_id,
+         horizon, timepoint, timepoint_weight,
+         number_of_hours_in_timepoint,
+         load_zone, technology, carbon_emission_tons)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+         """.format(scenario_id)
+    spin_on_database_lock(conn=db, cursor=c, sql=insert_temp_sql, data=results)
+
+    # Insert sorted results into permanent results table
+    insert_sql = """
+        INSERT INTO results_project_carbon_emissions
+        (scenario_id, project, period, subproblem_id, stage_id,
+        horizon, timepoint, timepoint_weight, number_of_hours_in_timepoint,
+        load_zone, technology, carbon_emission_tons)
+        SELECT
+        scenario_id, project, period, subproblem_id, stage_id,
+        horizon, timepoint, timepoint_weight, number_of_hours_in_timepoint,
+        load_zone, technology, carbon_emission_tons
+        FROM temp_results_project_carbon_emissions{}
+         ORDER BY scenario_id, project, subproblem_id, stage_id, timepoint;
+         """.format(scenario_id)
+    spin_on_database_lock(conn=db, cursor=c, sql=insert_sql, data=(),
+                          many=False)
 
 
 def process_results(db, c, scenario_id, subscenarios, quiet):
@@ -134,25 +272,25 @@ def process_results(db, c, scenario_id, subscenarios, quiet):
         DELETE FROM results_project_carbon_emissions_by_technology_period 
         WHERE scenario_id = ?
         """
-    spin_on_database_lock(
-        conn=db, cursor=c, sql=del_sql, data=(scenario_id,), many=False
-    )
+    spin_on_database_lock(conn=db, cursor=c, sql=del_sql,
+                          data=(scenario_id,),
+                          many=False)
 
     # Aggregate emissions by technology, period, and spinup_or_lookahead
     agg_sql = """
         INSERT INTO results_project_carbon_emissions_by_technology_period
         (scenario_id, subproblem_id, stage_id, period, load_zone, technology, 
-        spinup_or_lookahead, carbon_emissions_tons)
+        spinup_or_lookahead, carbon_emission_tons)
         SELECT
         scenario_id, subproblem_id, stage_id, period, load_zone, technology, 
-        spinup_or_lookahead, SUM(carbon_emissions_tons * timepoint_weight
-        * number_of_hours_in_timepoint ) AS carbon_emissions_tons 
-        FROM results_project_timepoint
+        spinup_or_lookahead, SUM(carbon_emission_tons * timepoint_weight
+        * number_of_hours_in_timepoint ) AS carbon_emission_tons 
+        FROM results_project_carbon_emissions
         WHERE scenario_id = ?
         GROUP BY subproblem_id, stage_id, period, load_zone, technology, 
         spinup_or_lookahead
         ORDER BY subproblem_id, stage_id, period, load_zone, technology, 
         spinup_or_lookahead;"""
-    spin_on_database_lock(
-        conn=db, cursor=c, sql=agg_sql, data=(scenario_id,), many=False
-    )
+    spin_on_database_lock(conn=db, cursor=c, sql=agg_sql,
+                          data=(scenario_id,),
+                          many=False)

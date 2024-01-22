@@ -1,4 +1,4 @@
-# Copyright 2016-2023 Blue Marble Analytics LLC.
+# Copyright 2016-2020 Blue Marble Analytics LLC.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -26,17 +26,14 @@ def add_model_components(m, d, scenario_directory, subproblem, stage):
     """
 
     def total_penalty_costs_rule(mod):
-        return sum(
-            mod.Local_Capacity_Shortage_MW_Expression[z, p]
-            * mod.local_capacity_violation_penalty_per_mw[z]
-            * mod.number_years_represented[p]
-            * mod.discount_factor[p]
-            for (z, p) in mod.LOCAL_CAPACITY_ZONE_PERIODS_WITH_REQUIREMENT
-        )
-
+        return sum(mod.Local_Capacity_Shortage_MW_Expression[z, p]
+                   * mod.local_capacity_violation_penalty_per_mw[z]
+                   * mod.number_years_represented[p]
+                   * mod.discount_factor[p]
+                   for (z, p) in
+                   mod.LOCAL_CAPACITY_ZONE_PERIODS_WITH_REQUIREMENT)
     m.Total_Local_Capacity_Shortage_Penalty_Costs = Expression(
-        rule=total_penalty_costs_rule
-    )
+        rule=total_penalty_costs_rule)
 
     record_dynamic_components(dynamic_components=d)
 

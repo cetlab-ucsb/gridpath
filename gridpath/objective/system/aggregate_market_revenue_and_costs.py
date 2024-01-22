@@ -1,4 +1,4 @@
-# Copyright 2016-2023 Blue Marble Analytics LLC.
+# Copyright 2016-2020 Blue Marble Analytics LLC.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,7 +18,8 @@ This module adds market revenue and costs to the objective function components.
 
 from pyomo.environ import Expression
 
-from gridpath.auxiliary.dynamic_components import cost_components, revenue_components
+from gridpath.auxiliary.dynamic_components import cost_components, \
+    revenue_components
 
 
 def add_model_components(m, d, scenario_directory, subproblem, stage):
@@ -30,20 +31,29 @@ def add_model_components(m, d, scenario_directory, subproblem, stage):
     dynamic component to the objective function.
 
     """
-
-    def total_market_net_cost_init(mod):
+    def total_market_revenue_rule(mod):
         return sum(
-            mod.Net_Market_Purchased_Power[lz, market, tmp]
+            mod.Total_Market_Sales[market, tmp]
             * mod.market_price[market, tmp]
             * mod.hrs_in_tmp[tmp]
             * mod.tmp_weight[tmp]
             * mod.number_years_represented[mod.period[tmp]]
             * mod.discount_factor[mod.period[tmp]]
-            for (lz, market, tmp) in mod.LZ_MARKETS * mod.TMPS
-            if not mod.no_market_participation_in_stage[lz, market]
+            for market in mod.MARKETS for tmp in mod.TMPS
         )
+    m.Total_Market_Revenue = Expression(rule=total_market_revenue_rule)
 
-    m.Total_Market_Net_Cost = Expression(initialize=total_market_net_cost_init)
+    def total_market_cost_rule(mod):
+        return sum(
+            mod.Total_Market_Purchases[market, tmp]
+            * mod.market_price[market, tmp]
+            * mod.hrs_in_tmp[tmp]
+            * mod.tmp_weight[tmp]
+            * mod.number_years_represented[mod.period[tmp]]
+            * mod.discount_factor[mod.period[tmp]]
+            for market in mod.MARKETS for tmp in mod.TMPS
+        )
+    m.Total_Market_Cost = Expression(rule=total_market_cost_rule)
 
     record_dynamic_components(dynamic_components=d)
 
@@ -55,4 +65,7 @@ def record_dynamic_components(dynamic_components):
     Add total load balance penalty costs to cost components
     """
 
-    getattr(dynamic_components, cost_components).append("Total_Market_Net_Cost")
+    getattr(dynamic_components, cost_components).append("Total_Market_Cost")
+    getattr(dynamic_components, revenue_components).append(
+        "Total_Market_Revenue"
+    )
