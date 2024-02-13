@@ -116,7 +116,7 @@ def all_modules_list():
         "transmission.capacity.capacity",
         "transmission.operations.operational_types",
         "transmission.operations.operations",
-        "transmission.operations.carbon_leakage",
+        #"transmission.operations.carbon_leakage",
         #"transmission.operations.operations_H2",
         #"transmission.operations.operations_ccs",
         "transmission.operations.costs",
@@ -153,6 +153,7 @@ def all_modules_list():
         "system.policy.carbon_cap.aggregate_project_carbon_emissions",
         "system.policy.carbon_cap.aggregate_transmission_carbon_emissions",
         "system.policy.carbon_cap.carbon_balance",
+        #"system.policy.carbon_cap.carbon_balance_leakage",
         "system.policy.carbon_tax.aggregate_project_carbon_emissions",
         "system.policy.carbon_tax.carbon_tax_costs",
         "system.reliability.prm.aggregate_project_simple_prm_contribution",
@@ -209,12 +210,11 @@ def optional_modules_list():
              "transmission.capacity.capacity",
              "transmission.operations.operational_types",
              "transmission.operations.operations",
-             "transmission.operations.carbon_leakage",
              #"transmission.operations.operations_H2",
              #"transmission.operations.operations_ccs",
              "system.load_balance.aggregate_transmission_power",
              "system.load_balance.aggregate_transmission_H2",
-             "system.load_balance.aggregate_transmission_ccs",
+             #"system.load_balance.aggregate_transmission_ccs",
              "objective.transmission.aggregate_capacity_costs"],
         "lf_reserves_up":
             ["geography.load_following_up_balancing_areas",
@@ -332,6 +332,11 @@ def optional_modules_list():
         "tuning": [
             "project.operations.tuning_costs",
             "objective.project.aggregate_operational_tuning_costs"
+            ],
+        "ccs": [
+            "system.load_balance.ccs_balance",
+            "system.load_balance.aggregate_project_ccs",
+            "objective.system.aggregate_ccs_balance_penalties"
             ]
     }
     return optional_modules
@@ -362,7 +367,13 @@ def cross_feature_modules_list():
             ["project.reliability.prm.elcc_surface",
              "system.reliability.prm.elcc_surface"],
         ("prm", "elcc_surface", "tuning"):
-            ["objective.system.reliability.prm.dynamic_elcc_tuning_penalties"]
+            ["objective.system.reliability.prm.dynamic_elcc_tuning_penalties"],
+        ("transmission","ccs"):
+            [
+             "system.load_balance.aggregate_transmission_ccs"
+             #"transmission.operations.carbon_leakage",
+             #"system.policy.carbon_cap.carbon_balance_leakage"
+             ]
     }
     return cross_modules
 
@@ -474,7 +485,7 @@ def determine_modules(
         else:
             for m in optional_modules[feature]:
                 modules_to_use.remove(m)
-
+                
     # Remove shared modules if none of the features sharing those modules is
     # requested
     shared_modules = feature_shared_modules_list()

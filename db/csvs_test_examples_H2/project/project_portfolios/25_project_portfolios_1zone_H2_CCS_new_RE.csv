@@ -1,0 +1,16 @@
+project,specified,new_build,capacity_type
+Coal,,,gen_ccs_spec
+Gas_CCGT,,,gen_ccs_spec
+Gas_CT,,,gen_ccs_spec
+Coal_CCS,,,gen_ccs_new
+Gas_CCGT_CCS,,,gen_ccs_new
+Gas_CT_CCS,,,gen_ccs_new
+SMR,,,gen_ccs_spec
+SMR_CCS,,,gen_ccs_new
+Wind,,,gen_spec
+Solar,,,gen_new_lin
+Underground,,,stor_new_lin
+Tank,,,stor_new_lin
+Fuel_Cell,,,gen_new_lin
+Electrolyzer,,,gen_new_lin
+Storage,,,stor_ccs_new_lin

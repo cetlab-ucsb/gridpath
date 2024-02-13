@@ -75,7 +75,7 @@ def add_model_components(m, d, scenario_directory, subproblem, stage):
         rule=carbon_cap_target_rule
     )
 
-    
+    '''
     def carbon_cap_period_total_rule(mod, p):
         """
         Total carbon emitted must be less than target
@@ -96,7 +96,7 @@ def add_model_components(m, d, scenario_directory, subproblem, stage):
         m.PERIODS,
         rule=carbon_cap_period_total_rule
     )
-    
+    '''
 def export_results(scenario_directory, subproblem, stage, m, d):
     """
 

@@ -1,0 +1,8 @@
+project,specified,new_build,capacity_type
+Coal,,,gen_ccs_spec
+Gas_CCGT,,,gen_ccs_spec
+Gas_CT,,,gen_ccs_spec
+Storage,,,stor_ccs_new_lin
+Wind_z2,,,gen_spec
+Gas_CCGT_z2,,,gen_ccs_spec
+Gas_CCGT_new_z2,,,gen_ccs_new

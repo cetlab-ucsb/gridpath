@@ -449,7 +449,7 @@ def add_model_components(m, d, scenario_directory, subproblem, stage):
         rule=max_H2_rule
     )
 
-    m.GenCommitCap_Min_Power_Constraint = Constraint(
+    m.GenCommitCap_Min_H2_Constraint = Constraint(
         m.GEN_COMMIT_CAP_H2_OPR_TMPS,
         rule=min_H2_rule
     )

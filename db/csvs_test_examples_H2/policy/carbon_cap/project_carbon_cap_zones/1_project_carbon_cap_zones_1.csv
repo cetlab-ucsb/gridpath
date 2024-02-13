@@ -1,0 +1,13 @@
+project,carbon_cap_zone
+Coal,Zone1
+Gas_CCGT,Zone1
+Gas_CT,Zone1
+Gas_CCGT_new,Zone1
+Gas_CT_new,Zone1
+Gas_CT_CCS,Zone1
+Gas_CCGT_CCS,Zone1
+Coal_CCS,Zone1
+SMR,Zone1
+SMR_CCS,Zone1
+Gas_CCGT_new_z2,Zone2
+Gas_CCGT_z2,Zone2

@@ -1,0 +1,7 @@
+transmission_line,operational_type,tx_simple_loss_factor,reactance_ohms
+Tx1,tx_simple,0.05,
+Tx_new,tx_simple,0.05,
+Tx2,tx_simple,0.05,
+Tx3,tx_simple,0.05,
+Pipe1,H2_simple,0.05,
+Pipe_new1,H2_simple,0.05,

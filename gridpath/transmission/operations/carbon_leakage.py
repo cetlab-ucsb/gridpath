@@ -158,12 +158,13 @@ def export_results(scenario_directory, subproblem, stage, m, d):
                            "transmission_leakage.csv"), "w", newline="") as \
             tx_op_results_file:
         writer = csv.writer(tx_op_results_file)
-        writer.writerow(["tx_line", "lz_from", "lz_to", "period"
+        writer.writerow(["tx_line", "lz_from", "lz_to", "period",
                          "H2_leakage",
-                         "ccs_leakage",'total'])
+                         "ccs_leakage"])
         for (l, p) in m.TX_OPR_PRDS:
             writer.writerow([
                 l,
+                p,
                 m.load_zone_from[l],
                 m.load_zone_to[l],
                 value(m.Tx_H2_Leakage[l, p]),

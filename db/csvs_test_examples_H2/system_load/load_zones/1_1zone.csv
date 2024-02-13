@@ -1,0 +1,2 @@
+load_zone,allow_overgeneration,overgeneration_penalty_per_mw,allow_unserved_energy,unserved_energy_penalty_per_mw,allow_over_H2,over_H2_penalty_per_mw,allow_unserved_H2,unserved_H2_penalty_per_mw,allow_over_ccs,over_ccs_penalty_per_tonne,allow_unserved_ccs,unserved_ccs_penalty_per_tonne
+Zone1,1,99999999,1,99999999,1,99999999,1,99999999,1,99999999,1,99999999

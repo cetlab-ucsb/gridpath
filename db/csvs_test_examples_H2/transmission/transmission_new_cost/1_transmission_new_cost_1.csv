@@ -1,0 +1,7 @@
+transmission_line,vintage,tx_lifetime_yrs,tx_annualized_real_cost_per_mw_yr,tx_annualized_real_cost_per_tonne_yr
+Tx_new,2020,35,10,0
+Tx_new,2030,35,10,0
+Pipe_new1,2020,35,20,0
+Pipe_new1,2030,35,20,0
+Gas_new1,2020,35,0,0
+Gas_new1,2030,35,0,0

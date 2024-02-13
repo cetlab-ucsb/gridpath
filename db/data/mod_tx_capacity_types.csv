@@ -1,1 +1,4 @@
-capacity_type,descriptiontx_spec,tx_new_lin,
+capacity_type,description
+tx_spec,
+tx_new_lin,
+mass_new_lin,
