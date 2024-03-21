@@ -123,7 +123,7 @@ def add_model_components(m, d, scenario_directory, subproblem, stage):
                 "gen_commit_lin", "gen_hydro", "gen_hydro_must_take",
                 "gen_must_run", "gen_simple", "gen_var",
                 "gen_var_must_take", "stor", "gen_var_stor_hyb","gen_H2","stor_H2","gen_H2_ele",
-                "gen_commit_cap_ccs","gen_commit_cap_H2","gen_commit_cap_H2_ccs","stor_ccs"]
+                "gen_commit_cap_ccs","gen_commit_cap_H2","gen_commit_cap_H2_ccs","stor_ccs","dac"]
     )
     m.availability_type = Param(
         m.PROJECTS,

@@ -33,7 +33,8 @@ def add_model_components(m, d, scenario_directory, subproblem, stage):
     :return:
     """
     m.FUELS = Set()
-    m.co2_intensity_tons_per_mmbtu = Param(m.FUELS, within=NonNegativeReals)
+    #m.co2_intensity_tons_per_mmbtu = Param(m.FUELS, within=NonNegativeReals)
+    m.co2_intensity_tons_per_mmbtu = Param(m.FUELS)
 
     m.fuel_price_per_mmbtu = Param(
         m.FUELS, m.PERIODS, m.MONTHS,

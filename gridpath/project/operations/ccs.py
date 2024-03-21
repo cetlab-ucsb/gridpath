@@ -142,7 +142,7 @@ def export_results(scenario_directory, subproblem, stage, m, d):
                          "timepoint_weight", "number_of_hours_in_timepoint",
                          "load_zone", "technology", "ccs_storage_tonne","ccs_capture_tonne"])
         for (p, tmp) in m.PRJ_OPR_TMPS:
-            if m.operational_type[p] in ["stor_ccs","gen_commit_cap_ccs","gen_commit_cap_H2_ccs"]:
+            if m.operational_type[p] in ["stor_ccs","gen_commit_cap_ccs","gen_commit_cap_H2_ccs", "dac"]:
                 writer.writerow([
                     p,
                     m.period[tmp],

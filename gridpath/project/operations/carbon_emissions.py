@@ -87,7 +87,31 @@ def add_model_components(m, d, scenario_directory, subproblem, stage):
         m.FUEL_PRJ_OPR_TMPS,
         rule=ccs_removal_rule
     )
+    
+    '''
+    def dac_removal_rule(mod, prj, tmp):
+        """
+        **Expression Name**: Power_Provision_MW
+        **Defined Over**: PRJ_OPR_TMPS
 
+        Power provision is a variable for some generators, but not others; get
+        the appropriate expression for each generator based on its operational
+        type.
+        """
+        gen_op_type = mod.operational_type[prj]
+        if hasattr(imported_operational_modules[gen_op_type],
+                   "dac_capture_rule"):
+            return imported_operational_modules[gen_op_type].\
+                dac_capture_rule(mod, prj, tmp)
+        else:
+            return op_type_init.ccs_removal_rule(mod, prj, tmp)
+     
+    m.DAC_Capture = Expression(
+        m.FUEL_PRJ_OPR_TMPS,
+        rule=dac_removal_rule
+    )
+    '''
+    
     def ccs_efficiency_rule(mod, prj):
         """
         **Expression Name**: Power_Provision_MW
@@ -116,21 +140,24 @@ def add_model_components(m, d, scenario_directory, subproblem, stage):
         (and whether a project burns fuel). Multiply by the timepoint duration
         and timepoint weight to get the total emissions amount.
         """
-
         return mod.Total_Fuel_Burn_MMBtu[prj, tmp] * \
-            mod.co2_intensity_tons_per_mmbtu[mod.fuel[prj]]\
-            - mod.Carbon_Remove[prj,tmp]
-
+                mod.co2_intensity_tons_per_mmbtu[mod.fuel[prj]]\
+                - mod.Carbon_Remove[prj,tmp]
+        
     m.Project_Carbon_Emissions = Expression(
         m.FUEL_PRJ_OPR_TMPS,
         rule=carbon_emissions_rule
     )
     
     def carbon_emissions_constraint_rule(mod,prj,tmp):
-        return mod.Carbon_Remove_Efficiency[prj] * \
-            mod.Total_Fuel_Burn_MMBtu[prj, tmp] * \
-            mod.co2_intensity_tons_per_mmbtu[mod.fuel[prj]]\
-            >= mod.Carbon_Remove[prj,tmp]
+        
+        if mod.co2_intensity_tons_per_mmbtu[mod.fuel[prj]]==-99:
+            return Constraint.Skip
+        else:
+            return mod.Carbon_Remove_Efficiency[prj] * \
+                    mod.Total_Fuel_Burn_MMBtu[prj, tmp] * \
+                    mod.co2_intensity_tons_per_mmbtu[mod.fuel[prj]]\
+                    >= mod.Carbon_Remove[prj,tmp]
             
             
     

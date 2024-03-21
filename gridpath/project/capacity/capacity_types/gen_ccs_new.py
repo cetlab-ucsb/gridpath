@@ -696,7 +696,7 @@ def write_model_inputs(
 
         # Write header
         writer.writerow(
-            ["project", "vintage", "ccs_lifetime_yrs", "lifetime_yrs",
+            ["project", "vintage",  "lifetime_yrs","ccs_lifetime_yrs",
              "annualized_real_cost_per_mw_yr","annualized_real_cost_per_tonne_yr"] +
             ([] if subscenarios.PROJECT_NEW_POTENTIAL_SCENARIO_ID is None
              else ["min_cumulative_new_build_mw", "max_cumulative_new_build_mw"]
