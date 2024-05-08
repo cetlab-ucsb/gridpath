@@ -459,7 +459,7 @@ def dac_constraint_rule(mod, g, tmp):
     """
     return mod.DAC_Tonne[g, tmp]\
         <= mod.CCS_Mass_Tonne[g, mod.period[tmp]]\
-        * mod.Availability_Derate[g, tmp]/mod.hrs_in_tmp[tmp]/mod.tmp_weight[tmp]
+        * mod.Availability_Derate[g, tmp]
 
 
 

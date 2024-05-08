@@ -537,7 +537,7 @@ def capacity_ccs_H2_max_constraint_rule(mod, g, tmp):
     Can't commit more capacity than available in each timepoint.
     """
     return mod.Gen_Capacity_CCS_H2_Tonne[g, tmp] \
-           <= mod.CCS_Capacity_Tonne[g, mod.period[tmp]]/mod.hrs_in_tmp[tmp]/mod.tmp_weight[tmp]
+           <= mod.CCS_Capacity_Tonne[g, mod.period[tmp]]
 
 
 

@@ -396,6 +396,11 @@ def H2_tracking_rule(mod, s, tmp):
             prev_tmp_hrs_in_tmp = mod.hrs_in_tmp[
                 mod.prev_tmp[tmp, mod.balancing_type_project[s]]
             ]
+
+            prev_tmp_weight = mod.tmp_weight[
+                mod.prev_tmp[tmp, mod.balancing_type_project[s]]
+            ]
+
             prev_tmp_starting_energy_in_storage = \
                 mod.Stor_Starting_H2_in_Storage_MWh[
                     s, mod.prev_tmp[tmp, mod.balancing_type_project[s]]
@@ -412,9 +417,9 @@ def H2_tracking_rule(mod, s, tmp):
         return \
             mod.Stor_Starting_H2_in_Storage_MWh[s, tmp] \
             == prev_tmp_starting_energy_in_storage \
-            + prev_tmp_charge * prev_tmp_hrs_in_tmp \
+            + prev_tmp_charge * prev_tmp_hrs_in_tmp * prev_tmp_weight\
             * mod.stor_H2_charging_efficiency[s] \
-            - prev_tmp_discharge * prev_tmp_hrs_in_tmp \
+            - prev_tmp_discharge * prev_tmp_hrs_in_tmp * prev_tmp_weight\
             / mod.stor_H2_discharging_efficiency[s]
 
 def max_H2_in_storage_rule(mod, s, tmp):
@@ -441,7 +446,7 @@ def H2_provision_rule(mod, s, tmp):
     charge (i.e. can't charge when the storage is full; can't discharge when
     storage is empty).
     """
-    return mod.Stor_H2_Discharge_MW[s, tmp] \
+    return mod.Stor_H2_Discharge_MW[s, tmp]\
         - mod.Stor_H2_Charge_MW[s, tmp]
 
 
@@ -511,7 +516,7 @@ def export_results(mod, d,
         writer.writerow(["project", "period", "balancing_type_project",
                          "horizon", "timepoint", "timepoint_weight",
                          "number_of_hours_in_timepoint",
-                         "technology", "load_zone",
+                         "technology", "load_zone", "H2_stor_mwh",
                          "H2_charge_mw", "H2_discharge_mw"])
         for (p, tmp) in mod.STOR_H2_OPR_TMPS:
             writer.writerow([
@@ -524,6 +529,7 @@ def export_results(mod, d,
                 mod.hrs_in_tmp[tmp],
                 mod.technology[p],
                 mod.load_zone[p],
+                value(mod.Stor_Starting_H2_in_Storage_MWh[p, tmp]),
                 value(mod.Stor_H2_Charge_MW[p, tmp]),
                 value(mod.Stor_H2_Discharge_MW[p, tmp])
             ])
