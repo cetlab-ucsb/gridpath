@@ -1,4 +1,4 @@
-<img width="66" height="17" alt="image" src="https://github.com/user-attachments/assets/6045f36e-1532-4714-9ae5-991974a5f452" />**Please don't "Sync fork"**
+**Please don't "Sync fork"**
 This is our branch used for module development
 
 
