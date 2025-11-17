@@ -64,22 +64,21 @@ I show the changes in csv files, and we need to add the corresponding changes in
 
 I add these new columns into the csv files:
 
-project/project_specified_fixed cost/.csv: "ccs_fixed_cost_per_tonne_year" --> the annualized capital cost (including fixed O&M) for capturing 1 tonne of CO2 by retrofitting the existing fossil fuel power plants
+project/project_specified_fixed cost/.csv:
+"ccs_fixed_cost_per_tonne_year" --> the annualized capital cost (including fixed O&M) for capturing 1 tonne of CO2 by retrofitting the existing fossil fuel power plants
 
-project/project_new_cost/.csv: "annualized_real_cost_per_tonne_yr" --> the annualized cost (including fixed O&M) for capturing 1 tonne of CO2 by building a new fossil fuel power plant and CO2 storage facilities. Note that for power plants, this only refers to the CCS module.
+project/project_new_cost/.csv:
+"annualized_real_cost_per_tonne_yr" --> the annualized cost (including fixed O&M) for capturing 1 tonne of CO2 by building a new fossil fuel power plant and CO2 storage facilities. Note that for power plants, this only refers to the CCS module.
 
 project/project_new_build/.csv:
-
 "max_cumulative_new_build_tonne", "min_cumulative_new_build_tonne" --> mainly used for the maximum and minimum storage potential for CO2 storage facilities.
 
 project/project_operational_chars/.csv: 
-
 "variable_ccs_om_cost_per_tonne " --> variable cost of operation CCS to capture 1 tonne CO2
 "ccs_mwh_per_tonne" --> electricity consumption for capturing 1 tonne CO2
 "ccs_efficiency"--> CO2 removal rate of CO2
 
 system_load/load_zones:
-
 "allow_over_H2": choose the soft or hard constraint for the overgeneration of H2	
 "over_H2_penalty_per_mw": penalty cost for overgeneraton
 "allow_unserved_H2": choose the soft or hard constraint for the unserved energy of H2
