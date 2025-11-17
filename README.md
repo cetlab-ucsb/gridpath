@@ -1,4 +1,4 @@
-**Please don't "Sync fork"**
+<img width="66" height="17" alt="image" src="https://github.com/user-attachments/assets/6045f36e-1532-4714-9ae5-991974a5f452" />**Please don't "Sync fork"**
 This is our branch used for module development
 
 
@@ -62,10 +62,24 @@ I created a file called db_schema_hydrogen.sql‎ in folder db, and I keep the d
 
 I show the changes in csv files, and we need to add the corresponding changes in db_schema_hydrogne.sql.
 
-project/project_specified_fixed cost/.csv:
-
 I add these new columns into the csv files:
-ccs_fixed_cost_per_tonne_year: this refers to the annualized cost for capturing 1 tonne of CO2 by retrofitting the existing fossil fuel power plants
 
+project/project_specified_fixed cost/.csv: "ccs_fixed_cost_per_tonne_year" --> the annualized capital cost (including fixed O&M) for capturing 1 tonne of CO2 by retrofitting the existing fossil fuel power plants
 
+project/project_new_cost/.csv: "annualized_real_cost_per_tonne_yr" --> the annualized cost (including fixed O&M) for capturing 1 tonne of CO2 by building a new fossil fuel power plant and CO2 storage facilities. Note that for power plants, this only refers to the CCS module.
 
+project/project_new_build/.csv: "max_cumulative_new_build_tonne", "min_cumulative_new_build_tonne" --> mainly used for the maximum and minimum storage potential for CO2 storage facilities.
+
+project/project_operational_chars/.csv: 
+"variable_ccs_om_cost_per_tonne " --> variable cost of operation CCS to capture 1 tonne CO2
+"ccs_mwh_per_tonne" --> electricity consumption for capturing 1 tonne CO2
+"ccs_efficiency"--> CO2 removal rate of CO2
+
+system_load/load_zones:
+"allow_over_H2"	
+"over_H2_penalty_per_mw"	
+allow_unserved_H2	
+unserved_H2_penalty_per_mw	
+allow_over_ccs	over_ccs_penalty_per_tonne	
+allow_unserved_ccs	
+unserved_ccs_penalty_per_tonne
