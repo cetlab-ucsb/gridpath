@@ -80,10 +80,11 @@ project/project_operational_chars/.csv:
 
 system_load/load_zones:
 
-"allow_over_H2"	
-"over_H2_penalty_per_mw"	
-allow_unserved_H2	
-unserved_H2_penalty_per_mw	
-allow_over_ccs	over_ccs_penalty_per_tonne	
-allow_unserved_ccs	
-unserved_ccs_penalty_per_tonne
+"allow_over_H2": choose the soft or hard constraint for the overgeneration of H2	
+"over_H2_penalty_per_mw": penalty cost for overgeneraton
+"allow_unserved_H2": choose the soft or hard constraint for the unserved energy of H2
+"unserved_H2_penalty_per_mw": penalty cost for unserved energy	
+"allow_over_ccs": choose the soft or hard constraint for over build of CCS	
+"over_ccs_penalty_per_tonne": penalty cost for overgeneraton
+"allow_unserved_ccs": choose the soft or hard constraint for the unserved energy of CCS
+"unserved_ccs_penalty_per_tonne": penalty cost for unserved energy	
