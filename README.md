@@ -60,4 +60,12 @@ mod_tx_operation_types.csv:
 **Step 3: write a new sql file which is used to import data from csv to sql database**
 I created a file called db_schema_hydrogen.sql‎ in folder db, and I keep the db_schema as the backup file.
 
+I show the changes in csv files, and we need to add the corresponding changes in db_schema_hydrogne.sql.
+
+project/project_specified_fixed cost/.csv:
+
+I add these new columns into the csv files:
+ccs_fixed_cost_per_tonne_year: this refers to the annualized cost for capturing 1 tonne of CO2 by retrofitting the existing fossil fuel power plants
+
+
 
