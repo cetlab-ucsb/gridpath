@@ -57,5 +57,7 @@ mod_tx_operation_types.csv:
 "H2_simple": this is used for the operation of H2 pipeline 
 "ccs_simple": this is used for the the operation of CO2 pipeline
 
+**Step 3: write a new sql file which is used to import data from csv to sql database**
+I created a file called db_schema_hydrogen.sql‎ in folder db, and I keep the db_schema as the backup file.
 
 
